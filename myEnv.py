@@ -62,7 +62,7 @@ class AirBattle(object):
         self.n_actions = 6
         self.n_features = self._get_state().shape[0]
         self._cursor = 0
-        self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
+        self._store = np.empty([10000] + [len(self.entities) * self.n_actions])
         self._count = 0
 
     # detect collision
