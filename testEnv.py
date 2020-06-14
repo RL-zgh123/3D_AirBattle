@@ -1,8 +1,5 @@
-import matplotlib.pyplot as plt
+
 import numpy as np
-import math
-from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d import Axes3D
 from myEnv import AirBattle
 
 class Model(object):
@@ -39,10 +36,16 @@ class Model(object):
 
 if __name__ == '__main__':
     iterations = 100
+    render_gap = 1000
+    steps_sum = 0
     model = Model()
     dic = {'win':0, 'equal':0, 'lose':0}
     for i in range(iterations):
         steps, r_all = model.rollout()
+        steps_sum += steps
+        if steps_sum >= render_gap:
+            model.env.render(steps_sum)
+            steps_sum = 0
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
         if r_all > 0:
             dic['win'] += 1
