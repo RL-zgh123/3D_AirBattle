@@ -202,7 +202,7 @@ class AirBattle(object):
         return  self._get_state(), 0, done, None
 
     def _store_state(self):
-        state = np.empty([1])
+        state = np.array([])
         for entity in self.entities:
             state = np.concatenate((state, entity.pos), axis=0)
         self._store[self._cursor] = state
@@ -251,7 +251,7 @@ class AirBattle(object):
         fig = plt.figure()
         ani = FuncAnimation(fig, self._update, gap, fargs=(pf, pe, pc),
                             interval=5, blit=False)
-        plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
+        # plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
         plt.show()
         plt.close()
         self._cursor = 0
