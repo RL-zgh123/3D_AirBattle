@@ -61,6 +61,9 @@ class AirBattle(object):
         self.entities = self.agents + self.hinder
         self.n_actions = 6
         self.n_features = self._get_state().shape[0]
+        self._cursor = 0
+        self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
+        self._count = 0
 
     # detect collision
     # no requirement for entity0 and entity1
@@ -176,6 +179,7 @@ class AirBattle(object):
 
     # return o_n_next, a_n, r_n, i_n
     def step(self, act0, act1):
+        self._store_state()
         self._update_state(act0, act1)
 
         done = False
@@ -196,3 +200,62 @@ class AirBattle(object):
                     agent.pos[:3] += rebound0
                     entity.pos[:3] += rebound1
         return  self._get_state(), 0, done, None
+
+    def _store_state(self):
+        state = np.empty([1])
+        for entity in self.entities:
+            state = np.concatenate((state, entity.pos), axis=0)
+        self._store[self._cursor] = state
+        self._cursor += 1
+
+    def _update(self, num, pf, pe, pc):
+        ax = plt.axes(projection='3d')
+        # Setting the axes properties
+        ax.set_xlim3d([-4.0, 4.0])
+        ax.set_xlabel('X')
+        ax.set_ylim3d([-4.0, 4.0])
+        ax.set_ylabel('Y')
+        ax.set_zlim3d([-4.0, 4.0])
+        ax.set_zlabel('Z')
+        ax.set_title('3D Experiment')
+
+        tf = self._store[num][ : self.n_actions]
+        te = self._store[num][self.n_actions : 2 * self.n_actions]
+        tc = self._store[num][-self.n_actions : ]
+
+        pf = self._rotate([pf[0], pf[1], pf[2], tf[3], tf[4], tf[5]])
+        pe = self._rotate([pe[0], pe[1], pe[2], te[3], te[4], te[5]])
+        pc = self._rotate([pc[0], pc[1], pc[2], tc[3], tc[4], tc[5]])
+        ax.plot_surface(pf[0] + tf[0], pf[1] + tf[1], pf[2] + tf[2], color='r')
+        ax.plot_surface(pe[0] + te[0], pe[1] + te[1], pe[2] + te[2], color='lightyellow')
+        ax.plot_surface(pc[0] + tc[0], pc[1] + tc[1], pc[2] + tc[2], color='navy')
+        return ax
+
+    def _generate_ball(self, radius, completed = True):
+        if not completed:
+            u = np.linspace(0, 2 * np.pi, 25)
+            v = np.linspace(-np.pi, np.pi/4, 25)
+        else:
+            u = np.linspace(0, 2 * np.pi, 25)
+            v = np.linspace(-np.pi, np.pi, 25)
+        xc = radius * np.outer(np.cos(u), np.sin(v))
+        yc = radius * np.outer(np.sin(u), np.sin(v))
+        zc = radius * np.outer(np.ones(np.size(u)), np.cos(v))
+        return [xc, yc, zc]
+
+    def render(self, gap):
+        pf = self._generate_ball(self.friend[0].radius, False)
+        pe = self._generate_ball(self.enemy[0].radius, False)
+        pc = self._generate_ball(self.hinder[0].radius, True)
+
+        fig = plt.figure()
+        ani = FuncAnimation(fig, self._update, gap, fargs=(pf, pe, pc),
+                            interval=5, blit=False)
+        plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
+        plt.show()
+        plt.close()
+        self._cursor = 0
+        self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
+        self._count += 1
+
+
