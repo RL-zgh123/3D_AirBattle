@@ -1,8 +1,8 @@
+import math
 import matplotlib.pyplot as plt
 import numpy as np
-import math
 from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d import Axes3D
+
 
 class entity(object):
     def __init__(self, movable=True, is_friend=True):
@@ -10,53 +10,65 @@ class entity(object):
         self.movable = movable
         self.is_friend = is_friend
         self.radius = 0.5 if self.movable else 1
-        self.vel = np.zeros(self.action_dim, dtype = np.float32)
-        self.acc = np.zeros(self.action_dim, dtype = np.float32)
+        self.vel = np.zeros(self.action_dim, dtype=np.float32)
+        self.acc = np.zeros(self.action_dim, dtype=np.float32)
         if self.movable:
-            self.pos = np.array([2, 2, 2, 0, 0, 0], dtype = np.float32) if self.is_friend else np.array([-2, -2, -2, 0, 0, 0], dtype = np.float32)
+            self.pos = np.array([2, 2, 2, 0, 0, 0],
+                                dtype=np.float32) if self.is_friend else np.array(
+                [-2, -2, -2, 0, 0, 0], dtype=np.float32)
         else:
-            self.pos = np.array([0, 0, 0, 0, 0, 0], dtype = np.float32)
-        self.max_pos = np.array([4, 4, 4, 2*math.pi, 2*math.pi, 2*math.pi], dtype = np.float32)
-        self.min_pos = -np.array([4, 4, 4, 2*math.pi, 2*math.pi, 2*math.pi], dtype = np.float32)
-        self.max_vel = np.array([0.5, 0.5, 0.5, math.pi/6, math.pi/6, math.pi/6], dtype = np.float32)
-        self.min_vel = -np.array([0.5, 0.5, 0.5, math.pi/6, math.pi/6, math.pi/6], dtype = np.float32)
-        self.max_acc = 2 * np.array([0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype = np.float32)
-        self.min_acc = - 2 * np.array([0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype = np.float32)
+            self.pos = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.max_pos = np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
+                                dtype=np.float32)
+        self.min_pos = -np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
+                                 dtype=np.float32)
+        self.max_vel = np.array(
+            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+        self.min_vel = -np.array(
+            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+        self.max_acc = 2 * np.array(
+            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+        self.min_acc = - 2 * np.array(
+            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
 
     def reset_state(self):
-        self.vel = np.zeros(self.action_dim, dtype = np.float32)
-        self.acc = np.zeros(self.action_dim, dtype = np.float32)
+        self.vel = np.zeros(self.action_dim, dtype=np.float32)
+        self.acc = np.zeros(self.action_dim, dtype=np.float32)
         if self.movable:
-            self.pos = np.concatenate((8*np.random.rand(3)-4, 6*np.random.rand(3)-3))
+            self.pos = np.concatenate(
+                (8 * np.random.rand(3) - 4, 6 * np.random.rand(3) - 3))
         else:
-            self.pos = np.array([0, 0, 0, 0, 0, 0], dtype = np.float32)
+            self.pos = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
 
     # limit vel range
     def vel_range_limit(self):
         for i in range(self.action_dim):
             self.vel[i] = self.max_vel[i] if self.vel[i] > self.max_vel[i] \
-                else self.min_vel[i] if self.vel[i] < self.min_vel[i] else self.vel[i]
+                else self.min_vel[i] if self.vel[i] < self.min_vel[i] else self.vel[
+                i]
 
     # limit pos range
     def pos_range_limit(self):
         for i in range(self.action_dim):
             self.pos[i] = self.max_pos[i] if self.pos[i] > self.max_pos[i] \
-                else self.min_pos[i] if self.pos[i] < self.min_pos[i] else self.pos[i]
+                else self.min_pos[i] if self.pos[i] < self.min_pos[i] else self.pos[
+                i]
 
     # limit acc range
     def acc_range_limit(self):
         for i in range(self.action_dim):
             self.acc[i] = self.max_acc[i] if self.acc[i] > self.max_acc[i] \
-                else self.min_acc[i] if self.acc[i] < self.min_acc[i] else self.acc[i]
+                else self.min_acc[i] if self.acc[i] < self.min_acc[i] else self.acc[
+                i]
 
 
 # only support two agents(friend and enemy)
 class AirBattle(object):
     def __init__(self):
         self.dt = 0.1
-        self.friend = [entity(is_friend = True)]
-        self.enemy = [entity(is_friend = False)]
-        self.hinder = [entity(movable = False)]
+        self.friend = [entity(is_friend=True)]
+        self.enemy = [entity(is_friend=False)]
+        self.hinder = [entity(movable=False)]
         self.agents = self.friend + self.enemy
         self.entities = self.agents + self.hinder
         self.n_actions = 6
@@ -69,7 +81,7 @@ class AirBattle(object):
     # no requirement for entity0 and entity1
     def _collision_detect(self, entity0, entity1):
         delta_pos = (entity0.pos - entity1.pos)[:3]
-        distance = np.linalg.norm(delta_pos) # modular value
+        distance = np.linalg.norm(delta_pos)  # modular value
         return True if distance < (entity0.radius + entity1.radius) else False
 
     # detect kill
@@ -92,9 +104,12 @@ class AirBattle(object):
         cos_angle01 = np.dot(dist01, direct0.T) / (mo_dist01 * mo_direct0)
         cos_angle10 = np.dot(dist10, direct1.T) / (mo_dist10 * mo_direct1)
 
-        if cos_angle01 < math.pi/4 and cos_angle10 >= math.pi/4:
+        threshold = math.sqrt(2) / 2
+
+        # flog, win, lose
+        if cos_angle01 > threshold and cos_angle10 <= threshold:
             return True, agent0, agent1
-        elif cos_angle01 >= math.pi/4 and cos_angle10 < math.pi/4:
+        elif cos_angle01 <= threshold and cos_angle10 > threshold:
             return True, agent1, agent0
         # both in fire range
         # elif cos_angle01 < math.pi/4 and cos_angle10 < math.pi/4:
@@ -121,9 +136,13 @@ class AirBattle(object):
     # rotate the orientation point
     def _rotate(self, pos):
         x, y, z, a, b, c = pos
-        rotatex = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
-        rotatey = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
-        rotatez = np.array([[math.cos(c), -math.sin(c), 0], [math.sin(c), math.cos(c), 0], [0, 0, 1]])
+        rotatex = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)],
+                            [0, math.sin(a), math.cos(a)]])
+        rotatey = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0],
+                            [-math.sin(b), 0, math.cos(b)]])
+        rotatez = np.array(
+            [[math.cos(c), -math.sin(c), 0], [math.sin(c), math.cos(c), 0],
+             [0, 0, 1]])
         R = np.dot(np.dot(rotatex, rotatey), rotatez)
         x1 = x * R[0][0] + y * R[0][1] + z * R[0][2]
         y1 = x * R[1][0] + y * R[1][1] + z * R[1][2]
@@ -132,8 +151,10 @@ class AirBattle(object):
 
     def _update_state(self, act0, act1):
         # pos update(regard as uniform motion)
-        delta_friend_pos = np.hstack((self.friend[0].vel[:3] * self.dt, self.friend[0].pos[-3:]))
-        delta_enemy_pos = np.hstack((self.enemy[0].vel[:3] * self.dt, self.enemy[0].pos[-3:]))
+        delta_friend_pos = np.hstack(
+            (self.friend[0].vel[:3] * self.dt, self.friend[0].pos[-3:]))
+        delta_enemy_pos = np.hstack(
+            (self.enemy[0].vel[:3] * self.dt, self.enemy[0].pos[-3:]))
         self.friend[0].pos[:3] += self._rotate(delta_friend_pos)
         self.enemy[0].pos[:3] += self._rotate(delta_enemy_pos)
         self.friend[0].pos[-3:] += self.friend[0].vel[-3:] * self.dt
@@ -153,9 +174,10 @@ class AirBattle(object):
         self.enemy[0].vel_range_limit()
 
     def _get_state(self):
-        return np.hstack((self.friend[0].pos, self.friend[0].vel, self.friend[0].radius,
-                          self.enemy[0].pos, self.enemy[0].vel, self.enemy[0].radius,
-                          self.hinder[0].pos, self.hinder[0].vel, self.hinder[0].radius))
+        return np.hstack(
+            (self.friend[0].pos, self.friend[0].vel, self.friend[0].radius,
+             self.enemy[0].pos, self.enemy[0].vel, self.enemy[0].radius,
+             self.hinder[0].pos, self.hinder[0].vel, self.hinder[0].radius))
 
     def reset(self):
         while True:
@@ -199,7 +221,7 @@ class AirBattle(object):
                     rebound0, rebound1 = self._rebound(agent, entity)
                     agent.pos[:3] += rebound0
                     entity.pos[:3] += rebound1
-        return  self._get_state(), 0, done, None
+        return self._get_state(), 0, done, None
 
     def _store_state(self):
         state = np.array([])
@@ -219,22 +241,23 @@ class AirBattle(object):
         ax.set_zlabel('Z')
         ax.set_title('3D Experiment')
 
-        tf = self._store[num][ : self.n_actions]
-        te = self._store[num][self.n_actions : 2 * self.n_actions]
-        tc = self._store[num][-self.n_actions : ]
+        tf = self._store[num][: self.n_actions]
+        te = self._store[num][self.n_actions: 2 * self.n_actions]
+        tc = self._store[num][-self.n_actions:]
 
         pf = self._rotate([pf[0], pf[1], pf[2], tf[3], tf[4], tf[5]])
         pe = self._rotate([pe[0], pe[1], pe[2], te[3], te[4], te[5]])
         pc = self._rotate([pc[0], pc[1], pc[2], tc[3], tc[4], tc[5]])
         ax.plot_surface(pf[0] + tf[0], pf[1] + tf[1], pf[2] + tf[2], color='r')
-        ax.plot_surface(pe[0] + te[0], pe[1] + te[1], pe[2] + te[2], color='lightyellow')
+        ax.plot_surface(pe[0] + te[0], pe[1] + te[1], pe[2] + te[2],
+                        color='lightyellow')
         ax.plot_surface(pc[0] + tc[0], pc[1] + tc[1], pc[2] + tc[2], color='navy')
         return ax
 
-    def _generate_ball(self, radius, completed = True):
+    def _generate_ball(self, radius, completed=True):
         if not completed:
             u = np.linspace(0, 2 * np.pi, 25)
-            v = np.linspace(-np.pi, np.pi/4, 25)
+            v = np.linspace(-np.pi, np.pi / 4, 25)
         else:
             u = np.linspace(0, 2 * np.pi, 25)
             v = np.linspace(-np.pi, np.pi, 25)
@@ -257,5 +280,3 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
         self._count += 1
-
-
