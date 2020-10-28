@@ -1,4 +1,5 @@
 import math
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -50,9 +51,16 @@ class entity(object):
     # limit pos range
     def pos_range_limit(self):
         for i in range(self.action_dim):
-            self.pos[i] = self.max_pos[i] if self.pos[i] > self.max_pos[i] \
-                else self.min_pos[i] if self.pos[i] < self.min_pos[i] else self.pos[
-                i]
+            if i < self.action_dim / 2:
+                self.pos[i] = self.max_pos[i] if self.pos[i] > self.max_pos[i] \
+                    else self.min_pos[i] if self.pos[i] < self.min_pos[i] else \
+                self.pos[
+                    i]
+            else:
+                self.pos[i] = self.pos[i] - self.max_pos[i] if self.pos[i] > \
+                                                               self.max_pos[i] else \
+                self.pos[i] - self.min_pos[i] if self.pos[i] < self.min_pos[i] else \
+                self.pos[i]
 
     # limit acc range
     def acc_range_limit(self):
@@ -127,8 +135,9 @@ class AirBattle(object):
         mo_dist10 = np.linalg.norm(dist10)
 
         overlay = agent0.radius + agent1.radius - mo_dist01
-        if agent0.movable and agent1.movable:
+        if agent1.movable:
             return - dist01 / mo_dist01 * overlay, - dist10 / mo_dist10 * overlay
+
         # agent0.movable and not agent1.movable
         else:
             return - dist01 / mo_dist01 * overlay, 0
@@ -155,6 +164,7 @@ class AirBattle(object):
             (self.friend[0].vel[:3] * self.dt, self.friend[0].pos[-3:]))
         delta_enemy_pos = np.hstack(
             (self.enemy[0].vel[:3] * self.dt, self.enemy[0].pos[-3:]))
+
         self.friend[0].pos[:3] += self._rotate(delta_friend_pos)
         self.enemy[0].pos[:3] += self._rotate(delta_enemy_pos)
         self.friend[0].pos[-3:] += self.friend[0].vel[-3:] * self.dt
@@ -205,22 +215,47 @@ class AirBattle(object):
         self._update_state(act0, act1)
 
         done = False
-        for agent in self.agents:
-            for entity in self.entities:
-                if agent is entity:
-                    continue
-                elif not self._collision_detect(agent, entity):
+        # for agent in self.agents:
+        #     for entity in self.entities:
+        #         if agent is entity or not self._collision_detect(agent, entity):
+        #             continue
+        #
+        #         elif entity.movable:
+        #             done, win, lose = self._kill_detect(agent, entity)
+        #             if done:
+        #                 reward = 10 if win == self.friend[0] else -10
+        #                 return self._get_state(), reward, done, None
+        #             else:
+        #                 rebound0, rebound1 = self._rebound(agent, entity)
+        #                 agent.pos[:3] += rebound0
+        #                 entity.pos[:3] += rebound1
+        #
+        #         else:
+        #             rebound0, _ = self._rebound(agent, entity)
+        #             agent.pos[:3] += rebound0
+
+        for i in range(0, len(self.agents)):
+            for j in range(0, len(self.entities)):
+                if self.agents[i] is self.entities[j] or not self._collision_detect(
+                        self.agents[i], self.entities[j]):
                     continue
 
-                if entity.movable:
-                    done, win, lose = self._kill_detect(agent, entity)
+                elif self.entities[j].movable:
+                    done, win, lose = self._kill_detect(self.agents[i],
+                                                        self.entities[j])
                     if done:
                         reward = 10 if win == self.friend[0] else -10
                         return self._get_state(), reward, done, None
+                    else:
+                        rebound0, rebound1 = self._rebound(self.agents[i],
+                                                           self.entities[j])
+                        self.agents[i].pos[:3] += rebound0
+                        self.entities[j].pos[:3] += rebound1
+
                 else:
-                    rebound0, rebound1 = self._rebound(agent, entity)
-                    agent.pos[:3] += rebound0
-                    entity.pos[:3] += rebound1
+                    rebound0, _ = self._rebound(self.agents[i], self.entities[j])
+                    self.agents[i].pos[:3] += rebound0
+
         return self._get_state(), 0, done, None
 
     def _store_state(self):
