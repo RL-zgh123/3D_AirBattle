@@ -215,24 +215,6 @@ class AirBattle(object):
         self._update_state(act0, act1)
 
         done = False
-        # for agent in self.agents:
-        #     for entity in self.entities:
-        #         if agent is entity or not self._collision_detect(agent, entity):
-        #             continue
-        #
-        #         elif entity.movable:
-        #             done, win, lose = self._kill_detect(agent, entity)
-        #             if done:
-        #                 reward = 10 if win == self.friend[0] else -10
-        #                 return self._get_state(), reward, done, None
-        #             else:
-        #                 rebound0, rebound1 = self._rebound(agent, entity)
-        #                 agent.pos[:3] += rebound0
-        #                 entity.pos[:3] += rebound1
-        #
-        #         else:
-        #             rebound0, _ = self._rebound(agent, entity)
-        #             agent.pos[:3] += rebound0
 
         for i in range(0, len(self.agents)):
             for j in range(0, len(self.entities)):
@@ -262,7 +244,7 @@ class AirBattle(object):
         state = np.array([])
         for entity in self.entities:
             state = np.concatenate((state, entity.pos), axis=0)
-        self._store[self._cursor] = state
+        self._store[self._cursor % self._store.shape[0]] = state
         self._cursor += 1
 
     def _update(self, num, pf, pe, pc):

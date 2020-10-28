@@ -8,7 +8,7 @@ class Model(object):
         self.n_actions = self.env.n_actions
         self.n_features = self.env.n_features
         self.step_count = 0
-        self.max_steps = 300
+        self.max_steps = 2000
 
     # random action
     def _get_action(self, o_n):
@@ -44,10 +44,11 @@ if __name__ == '__main__':
         steps, r_all = model.rollout()
         steps_sum += steps
         if steps_sum >= render_gap:
-            model.env.render(steps_sum)
+            # model.env.render(steps_sum)
             steps_sum = 0
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
         if r_all > 0:
+            model.env.render(steps_sum)
             dic['win'] += 1
         elif r_all == 0:
             dic['equal'] += 1
