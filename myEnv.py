@@ -89,8 +89,10 @@ class AirBattle(object):
     # no requirement for entity0 and entity1
     def _collision_detect(self, entity0, entity1):
         delta_pos = (entity0.pos - entity1.pos)[:3]
-        distance = np.linalg.norm(delta_pos)  # modular value
-        return True if distance < (entity0.radius + entity1.radius) else False
+        self.distance = np.linalg.norm(delta_pos)  # modular value
+        # if self.distance < (entity0.radius + entity1.radius):
+        #     print(entity0.pos[:3], entity1.pos[:3])
+        return True if self.distance < (entity0.radius + entity1.radius) else False
 
     # detect kill
     # both agent0 and agent1 must be agent
@@ -200,7 +202,6 @@ class AirBattle(object):
                 for other in self.entities:
                     if entity is not other:
                         flag = self._collision_detect(entity, other)
-                        # print(entity.pos, other.pos, flag)
                     if flag:
                         break
                 if flag:
@@ -211,14 +212,14 @@ class AirBattle(object):
 
     # return o_n_next, a_n, r_n, i_n
     def step(self, act0, act1):
-        self._store_state()
         self._update_state(act0, act1)
-
+        self._store_state()
         done = False
 
+        # rebound judgement
         for i in range(0, len(self.agents)):
             for j in range(0, len(self.entities)):
-                if self.agents[i] is self.entities[j] or not self._collision_detect(
+                if self.agents[i] == self.entities[j] or not self._collision_detect(
                         self.agents[i], self.entities[j]):
                     continue
 
@@ -227,6 +228,8 @@ class AirBattle(object):
                                                         self.entities[j])
                     if done:
                         reward = 10 if win == self.friend[0] else -10
+                        if reward == 10:
+                            print(i, j, self.distance, self.entities[i].pos[:3], self.entities[j].pos[:3])
                         return self._get_state(), reward, done, None
                     else:
                         rebound0, rebound1 = self._rebound(self.agents[i],
@@ -248,6 +251,7 @@ class AirBattle(object):
         self._cursor += 1
 
     def _update(self, num, pf, pe, pc):
+        print(num, self._store.shape[0], self._store[num])
         ax = plt.axes(projection='3d')
         # Setting the axes properties
         ax.set_xlim3d([-4.0, 4.0])
@@ -289,8 +293,10 @@ class AirBattle(object):
         pc = self._generate_ball(self.hinder[0].radius, True)
 
         fig = plt.figure()
-        ani = FuncAnimation(fig, self._update, gap, fargs=(pf, pe, pc),
-                            interval=5, blit=False)
+        num = 50
+        self._store = self._store[self._cursor % self._store.shape[0]-num:self._cursor % self._store.shape[0]]
+        ani = FuncAnimation(fig, self._update, num, fargs=(pf, pe, pc),
+                            interval=1, blit=False)
         # plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
         plt.show()
         plt.close()

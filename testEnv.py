@@ -48,7 +48,7 @@ if __name__ == '__main__':
             steps_sum = 0
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
         if r_all > 0:
-            model.env.render(steps_sum)
+            model.env.render(steps)
             dic['win'] += 1
         elif r_all == 0:
             dic['equal'] += 1
