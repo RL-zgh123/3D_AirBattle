@@ -82,6 +82,7 @@ class AirBattle(object):
         self.entities = self.agents + self.hinder
         self.n_actions = 6
         self.n_features = self._get_state().shape[0]
+        self.action_bound = self.friend[0].max_acc
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities) * self.n_actions])
         self._count = 0

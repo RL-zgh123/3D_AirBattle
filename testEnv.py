@@ -36,7 +36,6 @@ class Model(object):
 
 if __name__ == '__main__':
     iterations = 100
-    render_gap = 1000
     model = Model()
     dic = {'win':0, 'equal':0, 'lose':0}
     for i in range(iterations):
