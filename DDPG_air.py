@@ -44,7 +44,7 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        'explore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}'.format(
+        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}\n'.format(
             args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
             args.lra, args.lrc))
 
@@ -235,12 +235,9 @@ if __name__ == '__main__':
     # env = env.unwrapped
     # env.seed(1)
     env = AirBattle()
-    print_args()
-
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
-    print('bound', action_bound)
 
     sess = tf.Session()
     actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT)
@@ -256,6 +253,9 @@ if __name__ == '__main__':
         tf.summary.FileWriter("logs/", sess.graph)
 
     for i in range(MAX_EPISODES):
+        if i % 50 == 0:
+            print_args()
+
         if RENDER:
             env.render()
 
