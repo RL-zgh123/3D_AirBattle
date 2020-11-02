@@ -1,27 +1,53 @@
-import gym
+import argparse
+
 import numpy as np
 import tensorflow as tf
+
 from myEnv import AirBattle
 
 np.random.seed(1)
 tf.set_random_seed(1)
 
+
 #####################  hyper parameters  ####################
 
-MAX_EPISODES = 100000
-MAX_EP_STEPS = 2000
-LR_A = 0.0001  # learning rate for actor
-LR_C = 0.0001  # learning rate for critic
-GAMMA = 0.99  # reward discount
+EXPLORE = 10
+RANDOM_DECAY = 0.99
+RANDOM_DECAY_GAP = 100
+MAX_EPISODES = 10000
+MAX_EP_STEPS = 1000
+MEMORY_CAPACITY = 100000
+BATCH_SIZE = 128
+LR_A = 0.001  # learning rate for actor
+LR_C = 0.001  # learning rate for critic
+GAMMA = 0.9  # reward discount
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
 ][1]  # you can try different target replacement strategies
-MEMORY_CAPACITY = 50000
-BATCH_SIZE = 64
 
 RENDER = False
 OUTPUT_GRAPH = True
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--explore', type=float, default=EXPLORE)
+parser.add_argument('--decay', type=float, default=RANDOM_DECAY)
+parser.add_argument('--gap', type=int, default=RANDOM_DECAY_GAP)
+parser.add_argument('--batch', type=int, default=BATCH_SIZE)
+parser.add_argument('--esteps', type=int, default=MAX_EP_STEPS)
+parser.add_argument('--memory', type=int, default=MEMORY_CAPACITY)
+parser.add_argument('--lra', type=float, default=LR_A)
+parser.add_argument('--lrc', type=float, default=LR_C)
+args = parser.parse_args()
+
+
+def print_args():
+    print(
+        'explore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}'.format(
+            args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
+            args.lra, args.lrc))
+
 
 ###############################  Actor  ####################################
 
@@ -40,10 +66,7 @@ class Actor(object):
         self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
 
         with tf.variable_scope('Actor'):
-            # input s, output a
             self.a = self._build_net(self.s, scope='eval_net', trainable=True)
-
-            # input s_, output a, get a_ for critic
             self.a_ = self._build_net(self.s_, scope='target_net', trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -124,11 +147,8 @@ class Critic(object):
         self.s_ = s_
 
         with tf.variable_scope('Critic'):
-            # Input (s, a), output q
             self.a = a
             self.q = self._build_net(self.s, self.a, 'eval_net', trainable=True)
-
-            # Input (s_, a_), output q_ for q_target
             self.q_ = self._build_net(self.s_, a_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
@@ -210,72 +230,67 @@ class Memory(object):
         indices = np.random.choice(self.capacity, size=n)
         return self.data[indices, :]
 
+if __name__ == '__main__':
+    # env = gym.make(ENV_NAME)
+    # env = env.unwrapped
+    # env.seed(1)
+    env = AirBattle()
+    print_args()
 
-# env = gym.make(ENV_NAME)
-# env = env.unwrapped
-# env.seed(1)
-env = AirBattle()
+    state_dim = env.n_features
+    action_dim = env.n_actions
+    action_bound = env.action_bound  # action的激活函数是tanh
+    print('bound', action_bound)
 
-state_dim = env.n_features
-action_dim = env.n_actions
-action_bound = env.action_bound # action的激活函数是tanh
-print('bound', action_bound)
+    sess = tf.Session()
+    actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT)
+    critic = Critic(sess, state_dim, action_dim, args.lrc, GAMMA, REPLACEMENT, actor.a,
+                    actor.a_, actor.s, actor.s_)
+    actor.add_grad_to_graph(critic.a_grads)
 
-sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
 
-# Create actor and critic.
-# They are actually connected to each other, details can be seen in tensorboard or in this picture:
-actor = Actor(sess, action_dim, action_bound, LR_A, REPLACEMENT)
-critic = Critic(sess, state_dim, action_dim, LR_C, GAMMA, REPLACEMENT, actor.a,
-                actor.a_, actor.s, actor.s_)
-actor.add_grad_to_graph(critic.a_grads)
+    M = Memory(args.memory, dims=2 * state_dim + action_dim + 1)
 
-sess.run(tf.global_variables_initializer())
+    if OUTPUT_GRAPH:
+        tf.summary.FileWriter("logs/", sess.graph)
 
-M = Memory(MEMORY_CAPACITY, dims=2 * state_dim + action_dim + 1)
-
-if OUTPUT_GRAPH:
-    tf.summary.FileWriter("logs/", sess.graph)
-
-var = 10  # control exploration
-
-for i in range(MAX_EPISODES):
-    s = env.reset()
-    ep_reward = 0
-
-    for j in range(MAX_EP_STEPS):
-
+    for i in range(MAX_EPISODES):
         if RENDER:
             env.render()
 
-        # Add exploration noise
-        a = actor.choose_action(s)
-        a = np.clip(np.random.normal(a, var), -2,
-                    2)  # add randomness to action selection for exploration
+        s = env.reset()
+        ep_reward = 0
 
-        a0 = np.random.rand(action_dim)
+        for j in range(args.esteps):
+            # Add exploration noise
+            a = actor.choose_action(s)
+            a = np.clip(np.random.normal(a, args.explore), -2,
+                        2)  # add randomness to action selection for exploration
 
-        s_, r, done, info = env.step(a, a0)
+            a0 = np.random.rand(action_dim)
+            s_, r, done, info = env.step(a, a0)
+            M.store_transition(s, a, r / 10, s_)
 
-        M.store_transition(s, a, r / 10, s_)
+            if M.pointer > args.memory:
+                if M.pointer % args.gap == 0:
+                    args.explore *= args.decay  # decay the action randomness
+                b_M = M.sample(BATCH_SIZE)
+                b_s = b_M[:, :state_dim]
+                b_a = b_M[:, state_dim: state_dim + action_dim]
+                b_r = b_M[:, -state_dim - 1: -state_dim]
+                b_s_ = b_M[:, -state_dim:]
 
-        if M.pointer > MEMORY_CAPACITY:
-            var *= .9995  # decay the action randomness
-            b_M = M.sample(BATCH_SIZE)
-            b_s = b_M[:, :state_dim]
-            b_a = b_M[:, state_dim: state_dim + action_dim]
-            b_r = b_M[:, -state_dim - 1: -state_dim]
-            b_s_ = b_M[:, -state_dim:]
+                critic.learn(b_s, b_a, b_r, b_s_)
+                actor.learn(b_s)
 
-            critic.learn(b_s, b_a, b_r, b_s_)
-            actor.learn(b_s)
+            s = s_
+            ep_reward += r
 
-        s = s_
-        ep_reward += r
+            if j == args.esteps - 1:
+                print('Episode:', i, ' Reward: %i' % int(ep_reward),
+                      'Explore: %.2f' % args.explore, )
 
-        if j == MAX_EP_STEPS - 1:
-            print('Episode:', i, ' Reward: %i' % int(ep_reward),
-                  'Explore: %.2f' % var, )
-            if ep_reward > -300:
-                RENDER = False
-            break
+        # if :
+        #     RENDER = True
+        break

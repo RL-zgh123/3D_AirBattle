@@ -24,9 +24,9 @@ class entity(object):
         self.min_pos = -np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
                                  dtype=np.float32)
         self.max_vel = np.array(
-            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+            [1.0, 1.0, 1.0, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
         self.min_vel = -np.array(
-            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+            [1.0, 1.0, 1.0, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
         self.max_acc = 2 * np.array(
             [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
         self.min_acc = - 2 * np.array(
