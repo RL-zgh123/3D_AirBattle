@@ -11,7 +11,7 @@ tf.set_random_seed(1)
 #####################  hyper parameters  ####################
 
 EXPLORE = 10
-RANDOM_DECAY = 0.9
+RANDOM_DECAY = 0.99
 RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 10000
 MAX_EP_STEPS = 200
@@ -19,7 +19,7 @@ MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
-GAMMA = 0.9  # reward discount
+GAMMA = 0.99  # reward discount
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
@@ -229,9 +229,6 @@ class Memory(object):
         return self.data[indices, :]
 
 if __name__ == '__main__':
-    # env = gym.make(ENV_NAME)
-    # env = env.unwrapped
-    # env.seed(1)
     env = AirBattle()
     state_dim = env.n_features
     action_dim = env.n_actions
@@ -242,11 +239,11 @@ if __name__ == '__main__':
     critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, actor.a,
                     actor.a_, actor.s, actor.s_)
     actor.add_grad_to_graph(critic.a_grads)
-
     sess.run(tf.global_variables_initializer())
 
     M = Memory(args.memory, dims=2 * state_dim + action_dim + 1)
-    mr = deque(maxlen=100)
+    mr = deque(maxlen=200)
+    all_ep_r = []
 
     if OUTPUT_GRAPH:
         tf.summary.FileWriter("logs/", sess.graph)
@@ -269,7 +266,7 @@ if __name__ == '__main__':
 
             a0 = np.random.rand(action_dim)
             s_, r, done, info = env.step(a, a0)
-            M.store_transition(s, a, r / 10, s_)
+            M.store_transition(s, a, r, s_)
 
             if M.pointer > args.memory:
                 if M.pointer % args.gap == 0:
@@ -291,4 +288,12 @@ if __name__ == '__main__':
                       'Mean reward: %.2f' % np.round(np.mean(list(mr)), 2), )
 
         mr.append(ep_reward)
+        if i == 0:
+            all_ep_r.append(ep_reward)
+        else:
+            all_ep_r.append(all_ep_r[-1]*0.9+ep_reward*0.1)
 
+    plt.plot(np.arange(len(all_ep_r)), all_ep_r)
+    plt.xlabel('Episode')
+    plt.ylabel('Moving averaged episode reward')
+    plt.show()
