@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from myEnv import AirBattle
 from collections import deque
+import matplotlib.pyplot as plt
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -13,7 +14,7 @@ tf.set_random_seed(1)
 EXPLORE = 10
 RANDOM_DECAY = 0.99
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 10000
+MAX_EPISODES = 2000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -288,10 +289,7 @@ if __name__ == '__main__':
                       'Mean reward: %.2f' % np.round(np.mean(list(mr)), 2), )
 
         mr.append(ep_reward)
-        if i == 0:
-            all_ep_r.append(ep_reward)
-        else:
-            all_ep_r.append(all_ep_r[-1]*0.9+ep_reward*0.1)
+        all_ep_r.append(np.round(np.mean(list(mr)), 2))
 
     plt.plot(np.arange(len(all_ep_r)), all_ep_r)
     plt.xlabel('Episode')
