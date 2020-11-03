@@ -1,9 +1,8 @@
 import argparse
-
 import numpy as np
 import tensorflow as tf
-
 from myEnv import AirBattle
+from collections import deque
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -12,10 +11,10 @@ tf.set_random_seed(1)
 #####################  hyper parameters  ####################
 
 EXPLORE = 10
-RANDOM_DECAY = 0.99
-RANDOM_DECAY_GAP = 100
+RANDOM_DECAY = 0.9
+RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 10000
-MAX_EP_STEPS = 1000
+MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_A = 0.001  # learning rate for actor
@@ -25,10 +24,8 @@ REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
 ][1]  # you can try different target replacement strategies
-
 RENDER = False
 OUTPUT_GRAPH = True
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--explore', type=float, default=EXPLORE)
@@ -39,14 +36,15 @@ parser.add_argument('--esteps', type=int, default=MAX_EP_STEPS)
 parser.add_argument('--memory', type=int, default=MEMORY_CAPACITY)
 parser.add_argument('--lra', type=float, default=LR_A)
 parser.add_argument('--lrc', type=float, default=LR_C)
+parser.add_argument('--gamma', type=float, default=GAMMA)
 args = parser.parse_args()
 
 
 def print_args():
     print(
-        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}\n'.format(
+        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\n'.format(
             args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
-            args.lra, args.lrc))
+            args.lra, args.lrc, args.gamma))
 
 
 ###############################  Actor  ####################################
@@ -241,13 +239,14 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT)
-    critic = Critic(sess, state_dim, action_dim, args.lrc, GAMMA, REPLACEMENT, actor.a,
+    critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, actor.a,
                     actor.a_, actor.s, actor.s_)
     actor.add_grad_to_graph(critic.a_grads)
 
     sess.run(tf.global_variables_initializer())
 
     M = Memory(args.memory, dims=2 * state_dim + action_dim + 1)
+    mr = deque(maxlen=100)
 
     if OUTPUT_GRAPH:
         tf.summary.FileWriter("logs/", sess.graph)
@@ -289,8 +288,7 @@ if __name__ == '__main__':
 
             if j == args.esteps - 1:
                 print('Episode:', i, ' Reward: %i' % int(ep_reward),
-                      'Explore: %.2f' % args.explore, )
+                      'Mean reward: %.2f' % np.round(np.mean(list(mr)), 2), )
 
-        # if :
-        #     RENDER = True
-        # break
+        mr.append(ep_reward)
+

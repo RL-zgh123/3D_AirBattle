@@ -10,7 +10,7 @@ class entity(object):
         self.action_dim = 6
         self.movable = movable
         self.is_friend = is_friend
-        self.radius = 0.5 if self.movable else 1
+        self.radius = 2 if self.movable else 2
         self.vel = np.zeros(self.action_dim, dtype=np.float32)
         self.acc = np.zeros(self.action_dim, dtype=np.float32)
         if self.movable:
@@ -21,16 +21,13 @@ class entity(object):
             self.pos = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
         self.max_pos = np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
                                 dtype=np.float32)
-        self.min_pos = -np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
-                                 dtype=np.float32)
+        self.min_pos = -self.max_pos
         self.max_vel = np.array(
-            [1.0, 1.0, 1.0, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
-        self.min_vel = -np.array(
-            [1.0, 1.0, 1.0, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+            [3.0, 3.0, 3.0, math.pi / 3, math.pi / 3, math.pi / 3], dtype=np.float32)
+        self.min_vel = -self.max_vel
         self.max_acc = 2 * np.array(
-            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
-        self.min_acc = - 2 * np.array(
-            [0.5, 0.5, 0.5, math.pi / 6, math.pi / 6, math.pi / 6], dtype=np.float32)
+            [2.0, 2.0, 2.0, math.pi / 4, math.pi / 4, math.pi / 4], dtype=np.float32)
+        self.min_acc = - self.max_acc
 
     def reset_state(self):
         self.vel = np.zeros(self.action_dim, dtype=np.float32)
@@ -133,8 +130,8 @@ class AirBattle(object):
         # relative orientation of two agents
         dist01 = agent1.pos[:3] - agent0.pos[:3]
         dist10 = -dist01
-        mo_dist01 = np.linalg.norm(dist01)
-        mo_dist10 = np.linalg.norm(dist10)
+        mo_dist01 = max(np.linalg.norm(dist01), 0.1)
+        mo_dist10 = max(np.linalg.norm(dist10), 0.1)
 
         overlay = agent0.radius + agent1.radius - mo_dist01
         if agent1.movable:
