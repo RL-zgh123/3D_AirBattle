@@ -12,9 +12,9 @@ tf.set_random_seed(1)
 #####################  hyper parameters  ####################
 
 EXPLORE = 10
-RANDOM_DECAY = 0.99
+RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 2000
+MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -260,7 +260,6 @@ if __name__ == '__main__':
         ep_reward = 0
 
         for j in range(args.esteps):
-            # Add exploration noise
             a = actor.choose_action(s)
             a = np.clip(np.random.normal(a, args.explore), -2,
                         2)  # add randomness to action selection for exploration
