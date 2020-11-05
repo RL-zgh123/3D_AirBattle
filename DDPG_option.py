@@ -1,13 +1,14 @@
 import argparse
+from collections import deque
+
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+
 from myEnv import AirBattle
-from collections import deque
-import matplotlib.pyplot as plt
 
 np.random.seed(1)
 tf.set_random_seed(1)
-
 
 #####################  hyper parameters  ####################
 
@@ -48,11 +49,56 @@ def print_args():
             args.lra, args.lrc, args.gamma))
 
 
-###############################  Actor  ####################################
+class Option(object):
+    def __init__(self, sess, option_dim, learning_rate):
+        self.sess = sess
+        self.op_dim = option_dim
+        self.lr = learning_rate
+
+        self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
+
+        with tf.variable_scope('option'):
+            self.option = self._build_net('eval', self.s)
+        self.e_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                          scope='option/eval')
+
+    def _build_net(self, scope, s, trainable=True):
+        with tf.variable_scope(scope):
+            init_w = tf.random_normal_initializer(0., 0.3)
+            init_b = tf.constant_initializer(0.1)
+            h1 = tf.layers.dense(s, 30, activation=tf.nn.relu,
+                                 kernel_initializer=init_w,
+                                 bias_initializer=init_b,
+                                 name='h1',
+                                 trainable=trainable)
+            with tf.variable_scope('o'):
+                action_values = tf.layers.dense(h1, self.op_dim,
+                                                activation=tf.nn.tanh,
+                                                kernel_initializer=init_w,
+                                                bias_initializer=init_b,
+                                                name='value',
+                                                trainable=trainable)
+                option = tf.multinomial(tf.log(action_values), 1)[0][0]
+        return option
+
+    def learn(self, s):
+        self.sess.run(self.train_op, {self.s: s})
+
+    def add_grad_to_graph(self, o_grads):
+        with tf.variable_scope('option_grads'):
+            self.option_grads = tf.gradients(ys=self.option, xs=self.e_params,
+                                             grad_ys=o_grads)
+
+        with tf.variable_scope('O_train'):
+            self.train_op = tf.train.AdamOptimizer(-self.lr).apply_gradients(
+                zip(self.option_grads, self.e_params))
+
+    def get_option(self, s):
+        return self.sess.run(self.option, {self.s: s})
 
 
 class Actor(object):
-    def __init__(self, sess, action_dim, action_bound, learning_rate, replacement):
+    def __init__(self, sess, action_dim, action_bound, learning_rate, replacement, option, option_):
         self.sess = sess
         self.a_dim = action_dim
         self.action_bound = action_bound
@@ -65,8 +111,8 @@ class Actor(object):
         self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
 
         with tf.variable_scope('Actor'):
-            self.a = self._build_net(self.s, scope='eval_net', trainable=True)
-            self.a_ = self._build_net(self.s_, scope='target_net', trainable=False)
+            self.a = self._build_net(self.s, option, scope='eval_net', trainable=True)
+            self.a_ = self._build_net(self.s_, option_, scope='target_net', trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/eval_net')
@@ -82,10 +128,12 @@ class Actor(object):
                                            self.replacement['tau'] * e)
                                  for t, e in zip(self.t_params, self.e_params)]
 
-    def _build_net(self, s, scope, trainable):
+    def _build_net(self, s, option, scope, trainable):
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
             init_b = tf.constant_initializer(0.1)
+
+
             net = tf.layers.dense(s, 30, activation=tf.nn.relu,
                                   kernel_initializer=init_w, bias_initializer=init_b,
                                   name='l1',
@@ -229,6 +277,7 @@ class Memory(object):
         indices = np.random.choice(self.capacity, size=n)
         return self.data[indices, :]
 
+
 if __name__ == '__main__':
     env = AirBattle()
     state_dim = env.n_features
@@ -237,8 +286,9 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT)
-    critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, tf.stop_gradient(actor.a),
-                    tf.stop_gradient(actor.a_), actor.s, actor.s_)
+    critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
+                    actor.a,
+                    actor.a_, actor.s, actor.s_)
     actor.add_grad_to_graph(critic.a_grads)
     sess.run(tf.global_variables_initializer())
 
