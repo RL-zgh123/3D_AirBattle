@@ -110,6 +110,7 @@ class Option(object):
                 zip(self.option_grads, self.params))
 
     def get_option(self, s):
+        s = s[np.newaxis, :]
         return self.sess.run(self.o, {self.s: s})  # int
 
 
@@ -178,6 +179,7 @@ class Actor(object):
 
     def choose_action(self, s, o):
         s = s[np.newaxis, :]  # single state
+        print('o', o)
         return self.sess.run(self.a, feed_dict={self.s: s, self.o: o})[
             0]  # single action
 
@@ -314,7 +316,7 @@ if __name__ == '__main__':
                     actor.a,
                     actor.a_, actor.s, actor.s_, option.o, option.o_)
     actor.add_grad_to_graph(critic.a_grads)
-    option.add_grad_to_graph(critic.o_grads)
+    # option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
 
     M = Memory(args.memory, dims=2 * (state_dim + 1) + action_dim + 1)  # (s, o)
@@ -359,7 +361,7 @@ if __name__ == '__main__':
                 b_s_ = b_M[:, -state_dim - 1:-1]
                 b_o_ = b_M[:, -1:]
 
-                option.learn(b_s)
+                # option.learn(b_s)
                 critic.learn(b_s, b_o, b_a, b_r, b_s_, b_o_)
                 actor.learn(b_s, b_o)
 
