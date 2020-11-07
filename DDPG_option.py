@@ -207,12 +207,11 @@ class Critic(object):
         self.r = tf.placeholder(tf.float32, [None, 1], name='r')
         self.s_ = s_
         self.o = o
-        self.o_ = o_
 
         with tf.variable_scope('Critic'):
             self.a = a
-            self.q = self._build_net(self.s, self.a, 'eval_net', trainable=True)
-            self.q_ = self._build_net(self.s_, a_, 'target_net',
+            self.q = self._build_net(self.s, self.a, self.o, 'eval_net', trainable=True)
+            self.q_ = self._build_net(self.s_, a_, o_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -230,8 +229,7 @@ class Critic(object):
             self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
         with tf.variable_scope('a_grad'):
-            self.a_grads = tf.gradients(self.q, a)[
-                0]  # tensor of gradients of each sample (None, a_dim)
+            self.a_grads = tf.gradients(self.q, a)[0]
 
         with tf.variable_scope('o_grads'):
             self.o_grads = tf.gradients(self.q, o)[0]
@@ -245,8 +243,9 @@ class Critic(object):
                                                self.replacement['tau'] * e)
                                      for t, e in zip(self.t_params, self.e_params)]
 
-    def _build_net(self, s, a, scope, trainable):
+    def _build_net(self, s, a, o, scope, trainable):
         with tf.variable_scope(scope):
+            o = tf.cast(o, dtype=tf.float32)
             init_w = tf.random_normal_initializer(0., 0.1)
             init_b = tf.constant_initializer(0.1)
 
@@ -256,9 +255,13 @@ class Critic(object):
                                        initializer=init_w, trainable=trainable)
                 w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1],
                                        initializer=init_w, trainable=trainable)
+                w1_o = tf.get_variable('w1_o', [1, n_l1], initializer=init_w,
+                                       trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b,
                                      trainable=trainable)
-                net = tf.nn.relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
+                net = tf.nn.relu(
+                    tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + tf.matmul([[o]],
+                                                                        w1_o) + b1)
 
             with tf.variable_scope('q'):
                 q = tf.layers.dense(net, 1, kernel_initializer=init_w,
@@ -269,7 +272,7 @@ class Critic(object):
     def learn(self, s, o, a, r, s_, o_):
         self.sess.run(self.train_op,
                       feed_dict={self.s: s, self.a: a, self.r: r, self.s_: s_,
-                                 self.o: o, self.o_: o_})
+                                 self.o: o})
         if self.replacement['name'] == 'soft':
             self.sess.run(self.soft_replacement)
         else:
