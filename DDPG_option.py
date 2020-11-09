@@ -94,7 +94,9 @@ class Option(object):
                                                 bias_initializer=init_b,
                                                 name='value',
                                                 trainable=trainable)
-                option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
+                self.action_values = action_values
+                # option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
+                option = tf.argmax(action_values, 1)[0]
         return option
 
     def learn(self, s):
@@ -137,6 +139,7 @@ class Actor(object):
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/eval_net')
+        # print(self.e_params,'\n',self.e_params[0],'\n', self.e_params[:, 0])
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/target_net')
 
@@ -179,7 +182,6 @@ class Actor(object):
 
     def choose_action(self, s, o):
         s = s[np.newaxis, :]  # single state
-        print('o', o)
         return self.sess.run(self.a, feed_dict={self.s: s, self.o: o})[
             0]  # single action
 
