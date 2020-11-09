@@ -96,7 +96,8 @@ class Option(object):
                                                 trainable=trainable)
                 self.action_values = action_values
                 # option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
-                option = tf.argmax(action_values, 1)[0]
+                option = tf.argmax(action_values, 1)
+                option = tf.reshape(option, [-1, 1])
         return option
 
     def learn(self, s):
@@ -113,11 +114,12 @@ class Option(object):
 
     def get_option(self, s):
         s = s[np.newaxis, :]
+
         return self.sess.run(self.o, {self.s: s})  # int
 
 
 class Actor(object):
-    def __init__(self, sess, action_dim, action_bound, learning_rate, replacement, o,
+    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate, replacement, o,
                  o_):
         self.sess = sess
         self.a_dim = action_dim
@@ -125,6 +127,7 @@ class Actor(object):
         self.lr = learning_rate
         self.replacement = replacement
         self.t_replace_counter = 0
+        self.op_dim = option_dim
 
         self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
         self.r = tf.placeholder(tf.float32, [None, 1], name='r')
@@ -134,12 +137,12 @@ class Actor(object):
             self.o = o
             self.a = self._build_net(self.s, self.o, scope='eval_net',
                                      trainable=True)
+            print('actor', self.a)
             self.a_ = self._build_net(self.s_, o_, scope='target_net',
                                       trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/eval_net')
-        # print(self.e_params,'\n',self.e_params[0],'\n', self.e_params[:, 0])
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/target_net')
 
@@ -153,19 +156,28 @@ class Actor(object):
                                  for t, e in zip(self.t_params, self.e_params)]
 
     def _build_net(self, s, o, scope, trainable):
+        self.option_onehot = tf.squeeze(tf.one_hot(o, self.op_dim, dtype=tf.float32), [1])
+        s = tf.reshape(s, [-1, 1, state_dim])
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
             init_b = tf.constant_initializer(0.1)
             nl1 = 30
 
-            w1 = tf.get_variable('w1', [2, state_dim, nl1], initializer=init_w)
-            b1 = tf.get_variable('b1', [2, 1, nl1], initializer=init_b)
-            h1 = tf.nn.relu(tf.matmul(s, w1[o]) + b1[o])
+            w1 = tf.get_variable('w1', [self.op_dim, state_dim * nl1], initializer=init_w)
+            b1 = tf.get_variable('b1', [self.op_dim, 1 * nl1], initializer=init_b)
+            w1_onehot = tf.reshape(tf.matmul(self.option_onehot, w1), [-1, state_dim, nl1])
+            b1_onehot = tf.reshape(tf.matmul(self.option_onehot, b1), [-1, 1, nl1])
+            h1 = tf.nn.relu(tf.matmul(s, w1_onehot) + b1_onehot)
 
             with tf.variable_scope('a'):
-                w2 = tf.get_variable('w2', [2, nl1, self.a_dim], initializer=init_w)
-                b2 = tf.get_variable('b2', [2, 1, self.a_dim], initializer=init_b)
-                actions = tf.nn.tanh(tf.matmul(h1, w2[o]) + b2[o])
+                w2 = tf.get_variable('w2', [self.op_dim, nl1 * self.a_dim], initializer=init_w)
+                b2 = tf.get_variable('b2', [self.op_dim, 1 * self.a_dim], initializer=init_b)
+                w2_onehot = tf.reshape(tf.matmul(self.option_onehot, w2),
+                                       [-1, nl1, self.a_dim])
+                b2_onehot = tf.reshape(tf.matmul(self.option_onehot, b2),
+                                       [-1, 1, self.a_dim])
+                actions = tf.nn.tanh(tf.matmul(h1, w2_onehot) + b2_onehot)
+                actions = tf.squeeze(actions, [1])
                 scaled_a = tf.multiply(actions, self.action_bound,
                                        name='scaled_a')  # Scale output to -action_bound to action_bound
         return scaled_a
@@ -292,7 +304,8 @@ class Memory(object):
         self.pointer = 0
 
     def store_transition(self, s, o, a, r, s_, o_):
-        transition = np.hstack((s, a, [o], [r], s_, [o_]))
+        # o [?,1] two dimensions
+        transition = np.hstack((s, o[0], a, [r], s_, o_[0]))
         index = self.pointer % self.capacity
         self.data[index, :] = transition
         self.pointer += 1
@@ -312,7 +325,7 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     option = Option(sess, option_dim, args.lro)
-    actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT, option.o,
+    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT, option.o,
                   option.o_)
     critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
                     actor.a,
@@ -351,6 +364,9 @@ if __name__ == '__main__':
             if (o == 0 and r < 0) or (o == 1 and r > 0):
                 r /= 5
             M.store_transition(s, o, a, r, s_, o_)
+
+            if M.pointer == args.memory:
+                print('\nBegin training\n')
 
             if M.pointer > args.memory:
                 if M.pointer % args.gap == 0:
