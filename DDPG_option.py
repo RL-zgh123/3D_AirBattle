@@ -17,7 +17,7 @@ RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
-MEMORY_CAPACITY = 100000
+MEMORY_CAPACITY = 10000
 BATCH_SIZE = 128
 LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
@@ -72,11 +72,12 @@ class Option(object):
 
         # single structure
         with tf.variable_scope('option') as scope:
-            self.o = self._build_net(self.s)
+            self.o_v = self._build_net(self.s)
+            self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
             scope.reuse_variables()
-            self.o_ = self._build_net(self.s_)
-        self.params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                        scope='option/net')
+            self.o_v_ = self._build_net(self.s_)
+            self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
+        self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
         with tf.variable_scope(scope):
@@ -87,25 +88,24 @@ class Option(object):
                                  bias_initializer=init_b,
                                  name='h1',
                                  trainable=trainable)
-            with tf.variable_scope('o'):
-                action_values = tf.layers.dense(h1, self.op_dim,
-                                                activation=tf.nn.tanh,
-                                                kernel_initializer=init_w,
-                                                bias_initializer=init_b,
-                                                name='value',
-                                                trainable=trainable)
-                self.action_values = action_values
-                # option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
-                option = tf.argmax(action_values, 1)
-                option = tf.reshape(option, [-1, 1])
-        return option
+            values = tf.layers.dense(h1, self.op_dim,
+                                            activation=tf.nn.tanh,
+                                            kernel_initializer=init_w,
+                                            bias_initializer=init_b,
+                                            name='value',
+                                            trainable=trainable)
+            # option_values = tf.nn.softmax(values)
+            # option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
+            # option = tf.argmax(self.action_values, 1)
+            # option = tf.reshape(option, [-1, 1])
+        return values
 
     def learn(self, s):
         self.sess.run(self.train_op, {self.s: s})
 
     def add_grad_to_graph(self, o_grads):
         with tf.variable_scope('option_grads'):
-            self.option_grads = tf.gradients(ys=self.o, xs=self.params,
+            self.option_grads = tf.gradients(ys=self.o_v, xs=self.params,
                                              grad_ys=o_grads)
 
         with tf.variable_scope('O_train'):
@@ -114,12 +114,11 @@ class Option(object):
 
     def get_option(self, s):
         s = s[np.newaxis, :]
-
         return self.sess.run(self.o, {self.s: s})  # int
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate, replacement, o,
+    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate, replacement, s, s_, o,
                  o_):
         self.sess = sess
         self.a_dim = action_dim
@@ -129,16 +128,15 @@ class Actor(object):
         self.t_replace_counter = 0
         self.op_dim = option_dim
 
-        self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
-        self.r = tf.placeholder(tf.float32, [None, 1], name='r')
-        self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
+        self.s = s
+        self.s_ = s_
 
         with tf.variable_scope('Actor'):
             self.o = o
+            self.o_ = o_
             self.a = self._build_net(self.s, self.o, scope='eval_net',
                                      trainable=True)
-            print('actor', self.a)
-            self.a_ = self._build_net(self.s_, o_, scope='target_net',
+            self.a_ = self._build_net(self.s_, self.o_, scope='target_net',
                                       trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -223,11 +221,12 @@ class Critic(object):
         self.r = tf.placeholder(tf.float32, [None, 1], name='r')
         self.s_ = s_
         self.o = o
+        self.o_ = o_
 
         with tf.variable_scope('Critic'):
             self.a = a
             self.q = self._build_net(self.s, self.a, self.o, 'eval_net', trainable=True)
-            self.q_ = self._build_net(self.s_, a_, o_, 'target_net',
+            self.q_ = self._build_net(self.s_, a_, self.o_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -276,7 +275,7 @@ class Critic(object):
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b,
                                      trainable=trainable)
                 net = tf.nn.relu(
-                    tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + tf.matmul([[o]],
+                    tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + tf.matmul(o,
                                                                         w1_o) + b1)
 
             with tf.variable_scope('q'):
@@ -325,13 +324,13 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     option = Option(sess, option_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT, option.o,
+    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT, option.s, option.s_, option.o,
                   option.o_)
     critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
                     actor.a,
-                    actor.a_, actor.s, actor.s_, option.o, option.o_)
+                    actor.a_, option.s, option.s_, option.o, option.o_)
     actor.add_grad_to_graph(critic.a_grads)
-    # option.add_grad_to_graph(critic.o_grads)
+    option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
 
     M = Memory(args.memory, dims=2 * (state_dim + 1) + action_dim + 1)  # (s, o)
