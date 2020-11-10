@@ -73,10 +73,12 @@ class Option(object):
         # single structure
         with tf.variable_scope('option') as scope:
             self.o_v = self._build_net(self.s)
-            self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
+            # self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
+            self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
-            self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
+            # self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
+            self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
@@ -94,10 +96,6 @@ class Option(object):
                                             bias_initializer=init_b,
                                             name='value',
                                             trainable=trainable)
-            # option_values = tf.nn.softmax(values)
-            # option = tf.multinomial(tf.log(action_values), 1)[0][0]  # output 0/1
-            # option = tf.argmax(self.action_values, 1)
-            # option = tf.reshape(option, [-1, 1])
         return values
 
     def learn(self, s):
@@ -114,7 +112,7 @@ class Option(object):
 
     def get_option(self, s):
         s = s[np.newaxis, :]
-        return self.sess.run(self.o, {self.s: s})  # int
+        return self.sess.run(self.o, {self.s: s})
 
 
 class Actor(object):
@@ -155,6 +153,7 @@ class Actor(object):
 
     def _build_net(self, s, o, scope, trainable):
         self.option_onehot = tf.squeeze(tf.one_hot(o, self.op_dim, dtype=tf.float32), [1])
+        # print('onehot', self.option_onehot)
         s = tf.reshape(s, [-1, 1, state_dim])
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
@@ -208,11 +207,12 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, sess, state_dim, action_dim, learning_rate, gamma,
-                 replacement, a, a_, s, s_, o, o_):
+    def __init__(self, sess, option_dim, state_dim, action_dim, learning_rate, gamma,
+                 replacement, a, a_, s, s_, o_v, o_v_):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
+        self.op_dim = option_dim
         self.lr = learning_rate
         self.gamma = gamma
         self.replacement = replacement
@@ -220,13 +220,13 @@ class Critic(object):
         self.s = s
         self.r = tf.placeholder(tf.float32, [None, 1], name='r')
         self.s_ = s_
-        self.o = o
-        self.o_ = o_
+        self.o_v = o_v
+        self.o_v_ = o_v_
 
         with tf.variable_scope('Critic'):
             self.a = a
-            self.q = self._build_net(self.s, self.a, self.o, 'eval_net', trainable=True)
-            self.q_ = self._build_net(self.s_, a_, self.o_, 'target_net',
+            self.q = self._build_net(self.s, self.a, self.o_v, 'eval_net', trainable=True)
+            self.q_ = self._build_net(self.s_, a_, self.o_v_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -247,7 +247,7 @@ class Critic(object):
             self.a_grads = tf.gradients(self.q, a)[0]
 
         with tf.variable_scope('o_grads'):
-            self.o_grads = tf.gradients(self.q, o)[0]
+            self.o_grads = tf.gradients(self.q, o_v)[0]
 
         if self.replacement['name'] == 'hard':
             self.t_replace_counter = 0
@@ -258,9 +258,8 @@ class Critic(object):
                                                self.replacement['tau'] * e)
                                      for t, e in zip(self.t_params, self.e_params)]
 
-    def _build_net(self, s, a, o, scope, trainable):
+    def _build_net(self, s, a, o_v, scope, trainable):
         with tf.variable_scope(scope):
-            o = tf.cast(o, dtype=tf.float32)
             init_w = tf.random_normal_initializer(0., 0.1)
             init_b = tf.constant_initializer(0.1)
 
@@ -270,12 +269,12 @@ class Critic(object):
                                        initializer=init_w, trainable=trainable)
                 w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1],
                                        initializer=init_w, trainable=trainable)
-                w1_o = tf.get_variable('w1_o', [1, n_l1], initializer=init_w,
+                w1_o = tf.get_variable('w1_o', [self.op_dim, n_l1], initializer=init_w,
                                        trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b,
                                      trainable=trainable)
                 net = tf.nn.relu(
-                    tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + tf.matmul(o,
+                    tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + tf.matmul(o_v,
                                                                         w1_o) + b1)
 
             with tf.variable_scope('q'):
@@ -284,10 +283,10 @@ class Critic(object):
                                     trainable=trainable)  # Q(s,a)
         return q
 
-    def learn(self, s, o, a, r, s_, o_):
+    def learn(self, s, o_v, a, r, s_, o_v_):
         self.sess.run(self.train_op,
                       feed_dict={self.s: s, self.a: a, self.r: r, self.s_: s_,
-                                 self.o: o})
+                                 self.o_v: o_v, self.o_v_: o_v_})
         if self.replacement['name'] == 'soft':
             self.sess.run(self.soft_replacement)
         else:
@@ -326,9 +325,9 @@ if __name__ == '__main__':
     option = Option(sess, option_dim, args.lro)
     actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT, option.s, option.s_, option.o,
                   option.o_)
-    critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
+    critic = Critic(sess, option_dim, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
                     actor.a,
-                    actor.a_, option.s, option.s_, option.o, option.o_)
+                    actor.a_, option.s, option.s_, option.o_v, option.o_v_)
     actor.add_grad_to_graph(critic.a_grads)
     option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
@@ -378,7 +377,7 @@ if __name__ == '__main__':
                 b_s_ = b_M[:, -state_dim - 1:-1]
                 b_o_ = b_M[:, -1:]
 
-                # option.learn(b_s)
+                option.learn(b_s)
                 critic.learn(b_s, b_o, b_a, b_r, b_s_, b_o_)
                 actor.learn(b_s, b_o)
 
