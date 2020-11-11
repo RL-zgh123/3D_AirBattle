@@ -1,8 +1,10 @@
 import argparse
 from collections import deque
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+
 from myEnv import AirBattle
 
 np.random.seed(1)
@@ -19,6 +21,7 @@ LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
+FACTOR = 5  # reward shaping factor
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
@@ -37,14 +40,15 @@ parser.add_argument('--lro', type=float, default=LR_O)
 parser.add_argument('--lra', type=float, default=LR_A)
 parser.add_argument('--lrc', type=float, default=LR_C)
 parser.add_argument('--gamma', type=float, default=GAMMA)
+parser.add_argument('--factor', type=float, default=FACTOR)
 args = parser.parse_args()
 
 
 def print_args():
     print(
-        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\n'.format(
+        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nfactor: {}\n'.format(
             args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
-            args.lro, args.lra, args.lrc, args.gamma))
+            args.lro, args.lra, args.lrc, args.gamma, args.factor))
 
 
 class Option(object):
@@ -75,7 +79,8 @@ class Option(object):
             self.o_v_ = self._build_net(self.s_)
             # self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
             self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
-        self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='option/net')
+        self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                        scope='option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
         with tf.variable_scope(scope):
@@ -87,11 +92,11 @@ class Option(object):
                                  name='h1',
                                  trainable=trainable)
             values = tf.layers.dense(h1, self.op_dim,
-                                            activation=tf.nn.sigmoid,
-                                            kernel_initializer=init_w,
-                                            bias_initializer=init_b,
-                                            name='value',
-                                            trainable=trainable)
+                                     activation=tf.nn.sigmoid,
+                                     kernel_initializer=init_w,
+                                     bias_initializer=init_b,
+                                     name='value',
+                                     trainable=trainable)
         return values
 
     def learn(self, s):
@@ -116,7 +121,8 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate, replacement, s, s_, o,
+    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate,
+                 replacement, s, s_, o,
                  o_):
         self.sess = sess
         self.a_dim = action_dim
@@ -152,7 +158,8 @@ class Actor(object):
                                  for t, e in zip(self.t_params, self.e_params)]
 
     def _build_net(self, s, o, scope, trainable):
-        self.option_onehot = tf.squeeze(tf.one_hot(o, self.op_dim, dtype=tf.float32), [1])
+        self.option_onehot = tf.squeeze(tf.one_hot(o, self.op_dim, dtype=tf.float32),
+                                        [1])
         # print('onehot', self.option_onehot)
         s = tf.reshape(s, [-1, 1, state_dim])
         with tf.variable_scope(scope):
@@ -160,15 +167,19 @@ class Actor(object):
             init_b = tf.constant_initializer(0.1)
             nl1 = 30
 
-            w1 = tf.get_variable('w1', [self.op_dim, state_dim * nl1], initializer=init_w)
+            w1 = tf.get_variable('w1', [self.op_dim, state_dim * nl1],
+                                 initializer=init_w)
             b1 = tf.get_variable('b1', [self.op_dim, 1 * nl1], initializer=init_b)
-            w1_onehot = tf.reshape(tf.matmul(self.option_onehot, w1), [-1, state_dim, nl1])
+            w1_onehot = tf.reshape(tf.matmul(self.option_onehot, w1),
+                                   [-1, state_dim, nl1])
             b1_onehot = tf.reshape(tf.matmul(self.option_onehot, b1), [-1, 1, nl1])
             h1 = tf.nn.relu(tf.matmul(s, w1_onehot) + b1_onehot)
 
             with tf.variable_scope('a'):
-                w2 = tf.get_variable('w2', [self.op_dim, nl1 * self.a_dim], initializer=init_w)
-                b2 = tf.get_variable('b2', [self.op_dim, 1 * self.a_dim], initializer=init_b)
+                w2 = tf.get_variable('w2', [self.op_dim, nl1 * self.a_dim],
+                                     initializer=init_w)
+                b2 = tf.get_variable('b2', [self.op_dim, 1 * self.a_dim],
+                                     initializer=init_b)
                 w2_onehot = tf.reshape(tf.matmul(self.option_onehot, w2),
                                        [-1, nl1, self.a_dim])
                 b2_onehot = tf.reshape(tf.matmul(self.option_onehot, b2),
@@ -224,7 +235,8 @@ class Critic(object):
 
         with tf.variable_scope('Critic'):
             self.a = a
-            self.q = self._build_net(self.s, self.a, self.o_v, 'eval_net', trainable=True)
+            self.q = self._build_net(self.s, self.a, self.o_v, 'eval_net',
+                                     trainable=True)
             self.q_ = self._build_net(self.s_, a_, self.o_v_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
@@ -268,7 +280,8 @@ class Critic(object):
                                        initializer=init_w, trainable=trainable)
                 w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1],
                                        initializer=init_w, trainable=trainable)
-                w1_o = tf.get_variable('w1_o', [self.op_dim, n_l1], initializer=init_w,
+                w1_o = tf.get_variable('w1_o', [self.op_dim, n_l1],
+                                       initializer=init_w,
                                        trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b,
                                      trainable=trainable)
@@ -321,16 +334,19 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     option = Option(sess, option_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT, option.s, option.s_, option.o,
+    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT,
+                  option.s, option.s_, option.o,
                   option.o_)
-    critic = Critic(sess, option_dim, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
+    critic = Critic(sess, option_dim, state_dim, action_dim, args.lrc, args.gamma,
+                    REPLACEMENT,
                     actor.a,
                     actor.a_, option.s, option.s_, option.o_v, option.o_v_)
     actor.add_grad_to_graph(critic.a_grads)
     option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
 
-    M = Memory(args.memory, dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
+    M = Memory(args.memory,
+               dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
     mr = deque(maxlen=200)
     all_ep_r = []
 
@@ -358,9 +374,11 @@ if __name__ == '__main__':
             o_ = option.get_option(s_)
             o_v_ = option.get_option_value(s_)
 
+            # reward shaping based on o
             # o=0 encouraging offense, while o=1 encouraging defense
             if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
-                r /= 5
+                r /= args.factor
+
             M.store_transition(s, o, o_v, a, r, s_, o_, o_v_)
 
             if M.pointer == args.memory:
@@ -372,11 +390,13 @@ if __name__ == '__main__':
                 b_M = M.sample(BATCH_SIZE)
                 b_s = b_M[:, :state_dim]
                 b_o = b_M[:, state_dim: state_dim + 1]
-                b_ov = b_M[:, state_dim+1: state_dim+1+option_dim]
-                b_a = b_M[:, state_dim + 1+option_dim: state_dim + 1 +option_dim+ action_dim]
-                b_r = b_M[:, -option_dim-state_dim - 2: -option_dim-state_dim - 1]
-                b_s_ = b_M[:, -option_dim-state_dim - 1:-option_dim-1]
-                b_o_ = b_M[:, -option_dim-1:-option_dim]
+                b_ov = b_M[:, state_dim + 1: state_dim + 1 + option_dim]
+                b_a = b_M[:,
+                      state_dim + 1 + option_dim: state_dim + 1 + option_dim + action_dim]
+                b_r = b_M[:,
+                      -option_dim - state_dim - 2: -option_dim - state_dim - 1]
+                b_s_ = b_M[:, -option_dim - state_dim - 1:-option_dim - 1]
+                b_o_ = b_M[:, -option_dim - 1:-option_dim]
                 b_ov_ = b_M[:, -option_dim:]
 
                 option.learn(b_s)
