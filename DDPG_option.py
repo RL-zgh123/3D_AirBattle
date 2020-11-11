@@ -1,19 +1,18 @@
 import argparse
 from collections import deque
-
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-
 from myEnv import AirBattle
 
 np.random.seed(1)
 tf.set_random_seed(1)
 
+FIG_NUM = 0
 EXPLORE = 10
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 3000
+MAX_EPISODES = 2500
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -30,6 +29,7 @@ RENDER = False
 OUTPUT_GRAPH = True
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--fig', type=int, default=FIG_NUM)
 parser.add_argument('--explore', type=float, default=EXPLORE)
 parser.add_argument('--decay', type=float, default=RANDOM_DECAY)
 parser.add_argument('--gap', type=int, default=RANDOM_DECAY_GAP)
@@ -46,8 +46,8 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nfactor: {}\n'.format(
-            args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
+        '\nfig_num: {}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nfactor: {}\n'.format(
+            args.fig, args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
             args.lro, args.lra, args.lrc, args.gamma, args.factor))
 
 
@@ -416,4 +416,5 @@ if __name__ == '__main__':
     plt.plot(np.arange(len(all_ep_r)), all_ep_r)
     plt.xlabel('Episode')
     plt.ylabel('Moving averaged episode reward')
+    plt.savefig('result_{}.jpg'.format(args.fig))
     plt.show()
