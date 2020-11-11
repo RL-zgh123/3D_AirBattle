@@ -1,16 +1,12 @@
 import argparse
 from collections import deque
-
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-
 from myEnv import AirBattle
 
 np.random.seed(1)
 tf.set_random_seed(1)
-
-#####################  hyper parameters  ####################
 
 EXPLORE = 10
 RANDOM_DECAY = 0.9
@@ -26,7 +22,7 @@ GAMMA = 0.99  # reward discount
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
-][1]  # you can try different target replacement strategies
+][1]
 RENDER = False
 OUTPUT_GRAPH = True
 
@@ -73,10 +69,8 @@ class Option(object):
         # single structure
         with tf.variable_scope('option') as scope:
             self.o_v = self._build_net(self.s)
-            print('self.o_v', self.o_v)
             # self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
             self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
-            print('self.o', self.o)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
             # self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
@@ -114,8 +108,7 @@ class Option(object):
 
     def get_option(self, s):
         s = s[np.newaxis, :]
-        print('o_v', self.sess.run(self.o_v, {self.s: s}))
-        return self.sess.run(self.o, {self.s: s})
+        return self.sess.run(self.o, {self.s: s})[0]
 
 
 class Actor(object):
@@ -137,7 +130,6 @@ class Actor(object):
             self.o_ = o_
             self.a = self._build_net(self.s, self.o, scope='eval_net',
                                      trainable=True)
-            print('self.a', self.a)
             self.a_ = self._build_net(self.s_, self.o_, scope='target_net',
                                       trainable=False)
 
@@ -183,7 +175,7 @@ class Actor(object):
                                        name='scaled_a')  # Scale output to -action_bound to action_bound
         return scaled_a
 
-    def learn(self, s, o):  # batch update
+    def learn(self, s, o):
         self.sess.run(self.train_op, feed_dict={self.s: s, self.o: o})
 
         if self.replacement['name'] == 'soft':
@@ -194,9 +186,8 @@ class Actor(object):
             self.t_replace_counter += 1
 
     def choose_action(self, s, o):
-        s = s[np.newaxis, :]  # single state
-        return self.sess.run(self.a, feed_dict={self.s: s, self.o: o})[
-            0]  # single action
+        s = s[np.newaxis, :]
+        return self.sess.run(self.a, feed_dict={self.s: s, self.o: o})[0]
 
     def add_grad_to_graph(self, a_grads):
         with tf.variable_scope('policy_grads'):
@@ -355,7 +346,7 @@ if __name__ == '__main__':
 
         for j in range(args.esteps):
             o = option.get_option(s)
-            a = actor.choose_action(s, o)
+            a = actor.choose_action(s, o[np.newaxis, :])
             a = np.clip(np.random.normal(a, args.explore), -2,
                         2)  # add randomness for exploration
             a0 = np.random.rand(action_dim)
@@ -363,10 +354,10 @@ if __name__ == '__main__':
             o_ = option.get_option(s_)
 
             # o=0 encouraging offense, while o=1 encouraging defense
-            if (o == 0 and r < 0) or (o == 1 and r > 0):
+            if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
+                print('here')
                 r /= 5
             M.store_transition(s, o, a, r, s_, o_)
-            print('o', o, 'a', a)
 
             if M.pointer == args.memory:
                 print('\nBegin training\n')
