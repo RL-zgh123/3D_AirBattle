@@ -73,8 +73,10 @@ class Option(object):
         # single structure
         with tf.variable_scope('option') as scope:
             self.o_v = self._build_net(self.s)
+            print('self.o_v', self.o_v)
             # self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
             self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
+            print('self.o', self.o)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
             # self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
@@ -91,7 +93,7 @@ class Option(object):
                                  name='h1',
                                  trainable=trainable)
             values = tf.layers.dense(h1, self.op_dim,
-                                            activation=tf.nn.tanh,
+                                            activation=tf.nn.sigmoid,
                                             kernel_initializer=init_w,
                                             bias_initializer=init_b,
                                             name='value',
@@ -112,6 +114,7 @@ class Option(object):
 
     def get_option(self, s):
         s = s[np.newaxis, :]
+        print('o_v', self.sess.run(self.o_v, {self.s: s}))
         return self.sess.run(self.o, {self.s: s})
 
 
@@ -134,6 +137,7 @@ class Actor(object):
             self.o_ = o_
             self.a = self._build_net(self.s, self.o, scope='eval_net',
                                      trainable=True)
+            print('self.a', self.a)
             self.a_ = self._build_net(self.s_, self.o_, scope='target_net',
                                       trainable=False)
 
@@ -302,7 +306,7 @@ class Memory(object):
         self.pointer = 0
 
     def store_transition(self, s, o, a, r, s_, o_):
-        # o [?,1] two dimensions
+        # o [?,1] two dimensions, [[o]]
         transition = np.hstack((s, o[0], a, [r], s_, o_[0]))
         index = self.pointer % self.capacity
         self.data[index, :] = transition
@@ -362,6 +366,7 @@ if __name__ == '__main__':
             if (o == 0 and r < 0) or (o == 1 and r > 0):
                 r /= 5
             M.store_transition(s, o, a, r, s_, o_)
+            print('o', o, 'a', a)
 
             if M.pointer == args.memory:
                 print('\nBegin training\n')
