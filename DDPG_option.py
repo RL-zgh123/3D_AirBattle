@@ -376,10 +376,11 @@ if __name__ == '__main__':
 
             # reward shaping based on o
             # o=0 encouraging offense, while o=1 encouraging defense
+            r1 = r
             if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
-                r /= args.factor
+                r1 /= args.factor
 
-            M.store_transition(s, o, o_v, a, r, s_, o_, o_v_)
+            M.store_transition(s, o, o_v, a, r1, s_, o_, o_v_)
 
             if M.pointer == args.memory:
                 print('\nBegin training\n')
