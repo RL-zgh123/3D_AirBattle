@@ -13,7 +13,7 @@ RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
-MEMORY_CAPACITY = 10000
+MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
@@ -109,6 +109,10 @@ class Option(object):
     def get_option(self, s):
         s = s[np.newaxis, :]
         return self.sess.run(self.o, {self.s: s})[0]
+
+    def get_option_value(self, s):
+        s = s[np.newaxis, :]
+        return self.sess.run(self.o_v, {self.s: s})[0]
 
 
 class Actor(object):
@@ -296,9 +300,8 @@ class Memory(object):
         self.data = np.zeros((capacity, dims))
         self.pointer = 0
 
-    def store_transition(self, s, o, a, r, s_, o_):
-        # o [?,1] two dimensions, [[o]]
-        transition = np.hstack((s, o[0], a, [r], s_, o_[0]))
+    def store_transition(self, s, o, o_v, a, r, s_, o_, o_v_):
+        transition = np.hstack((s, o, o_v, a, [r], s_, o_, o_v_))
         index = self.pointer % self.capacity
         self.data[index, :] = transition
         self.pointer += 1
@@ -327,7 +330,7 @@ if __name__ == '__main__':
     option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
 
-    M = Memory(args.memory, dims=2 * (state_dim + 1) + action_dim + 1)  # (s, o)
+    M = Memory(args.memory, dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
     mr = deque(maxlen=200)
     all_ep_r = []
 
@@ -346,18 +349,19 @@ if __name__ == '__main__':
 
         for j in range(args.esteps):
             o = option.get_option(s)
+            o_v = option.get_option_value(s)
             a = actor.choose_action(s, o[np.newaxis, :])
             a = np.clip(np.random.normal(a, args.explore), -2,
                         2)  # add randomness for exploration
             a0 = np.random.rand(action_dim)
             s_, r, done, info = env.step(a, a0)
             o_ = option.get_option(s_)
+            o_v_ = option.get_option_value(s_)
 
             # o=0 encouraging offense, while o=1 encouraging defense
             if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
-                print('here')
                 r /= 5
-            M.store_transition(s, o, a, r, s_, o_)
+            M.store_transition(s, o, o_v, a, r, s_, o_, o_v_)
 
             if M.pointer == args.memory:
                 print('\nBegin training\n')
@@ -368,13 +372,15 @@ if __name__ == '__main__':
                 b_M = M.sample(BATCH_SIZE)
                 b_s = b_M[:, :state_dim]
                 b_o = b_M[:, state_dim: state_dim + 1]
-                b_a = b_M[:, state_dim + 1: state_dim + 1 + action_dim]
-                b_r = b_M[:, -state_dim - 2: -state_dim - 1]
-                b_s_ = b_M[:, -state_dim - 1:-1]
-                b_o_ = b_M[:, -1:]
+                b_ov = b_M[:, state_dim+1: state_dim+1+option_dim]
+                b_a = b_M[:, state_dim + 1+option_dim: state_dim + 1 +option_dim+ action_dim]
+                b_r = b_M[:, -option_dim-state_dim - 2: -option_dim-state_dim - 1]
+                b_s_ = b_M[:, -option_dim-state_dim - 1:-option_dim-1]
+                b_o_ = b_M[:, -option_dim-1:-option_dim]
+                b_ov_ = b_M[:, -option_dim:]
 
                 option.learn(b_s)
-                critic.learn(b_s, b_o, b_a, b_r, b_s_, b_o_)
+                critic.learn(b_s, b_ov, b_a, b_r, b_s_, b_ov_)
                 actor.learn(b_s, b_o)
 
             s = s_
