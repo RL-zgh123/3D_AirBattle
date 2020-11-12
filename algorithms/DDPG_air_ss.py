@@ -15,7 +15,7 @@ MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
-LR_S = 0.0005 # learning rate for assistnet
+LR_S = 0.001 # learning rate for assistnet
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
@@ -145,7 +145,7 @@ class Actor(object):
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
             init_b = tf.constant_initializer(0.1)
-            net = tf.layers.dense(s, 30, activation=tf.nn.relu,
+            net = tf.layers.dense(phi_s, 30, activation=tf.nn.relu,
                                   kernel_initializer=init_w, bias_initializer=init_b,
                                   name='l1',
                                   trainable=trainable)
@@ -249,7 +249,7 @@ class Critic(object):
                                        initializer=init_w, trainable=trainable)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=init_b,
                                      trainable=trainable)
-                net = tf.nn.relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
+                net = tf.nn.relu(tf.matmul(phi_s, w1_s) + tf.matmul(a, w1_a) + b1)
 
             with tf.variable_scope('q'):
                 q = tf.layers.dense(net, 1, kernel_initializer=init_w,
@@ -268,6 +268,13 @@ class Critic(object):
             self.t_replace_counter += 1
 
 
+
+
+
+
+
+
+
 #####################  Memory  ####################
 
 class Memory(object):
@@ -276,8 +283,8 @@ class Memory(object):
         self.data = np.zeros((capacity, dims))
         self.pointer = 0
 
-    def store_transition(self, s, a, r, s_):
-        transition = np.hstack((s, a, [r], s_))
+    def store_transition(self, s, phi_s, a, r, s_, phi_s_):
+        transition = np.hstack((s, phi_s[0], a, [r], s_, phi_s_[0]))
         index = self.pointer % self.capacity  # replace the old memory with new memory
         self.data[index, :] = transition
         self.pointer += 1
@@ -289,23 +296,25 @@ class Memory(object):
 
 if __name__ == '__main__':
     env = AirBattle()
+    phi_dim = 30
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
 
     sess = tf.Session()
-    actor = Actor(sess, action_dim, action_bound, args.lra, REPLACEMENT)
-    critic = Critic(sess, state_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, tf.stop_gradient(actor.a),
-                    tf.stop_gradient(actor.a_), actor.s, actor.s_)
+    assist = AssistNet(sess, state_dim, phi_dim, action_dim, args.lrs)
+    actor = Actor(sess, phi_dim, action_dim, action_bound, args.lra, REPLACEMENT)
+    critic = Critic(sess, phi_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, actor.a,
+                    actor.a_, actor.phi_s, actor.phi_s_)
     actor.add_grad_to_graph(critic.a_grads)
     sess.run(tf.global_variables_initializer())
 
-    M = Memory(args.memory, dims=2 * state_dim + action_dim + 1)
+    M = Memory(args.memory, dims=2 * (state_dim+phi_dim) + action_dim + 1)
     mr = deque(maxlen=200)
     all_ep_r = []
 
     if OUTPUT_GRAPH:
-        tf.summary.FileWriter("logs/", sess.graph)
+        tf.summary.FileWriter("../logs/", sess.graph)
 
     for i in range(MAX_EPISODES):
         if i % 50 == 0:
@@ -318,25 +327,29 @@ if __name__ == '__main__':
         ep_reward = 0
 
         for j in range(args.esteps):
-            a = actor.choose_action(s)
+            phi_s = assist.get_phi(s)
+            a = actor.choose_action(phi_s)
             a = np.clip(np.random.normal(a, args.explore), -2,
                         2)  # add randomness to action selection for exploration
-
             a0 = np.random.rand(action_dim)
             s_, r, done, info = env.step(a, a0)
-            M.store_transition(s, a, r, s_)
+            phi_s_ = assist.get_phi(s_)
+            M.store_transition(s, phi_s, a, r, s_, phi_s_)
 
             if M.pointer > args.memory:
                 if M.pointer % args.gap == 0:
                     args.explore *= args.decay  # decay the action randomness
                 b_M = M.sample(BATCH_SIZE)
                 b_s = b_M[:, :state_dim]
-                b_a = b_M[:, state_dim: state_dim + action_dim]
-                b_r = b_M[:, -state_dim - 1: -state_dim]
-                b_s_ = b_M[:, -state_dim:]
+                b_ps = b_M[:, state_dim: state_dim+phi_dim]
+                b_a = b_M[:, state_dim+phi_dim: state_dim + action_dim+phi_dim]
+                b_r = b_M[:, -state_dim-phi_dim - 1: -state_dim-phi_dim]
+                b_s_ = b_M[:, -state_dim-phi_dim:-phi_dim]
+                b_ps_ = b_M[:, -phi_dim:]
 
-                critic.learn(b_s, b_a, b_r, b_s_)
-                actor.learn(b_s)
+                assist.learn(b_s, b_s_, b_a)
+                critic.learn(b_ps, b_a, b_r, b_ps_)
+                actor.learn(b_ps)
 
             s = s_
             ep_reward += r
