@@ -3,7 +3,7 @@ from collections import deque
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from myEnv import AirBattle
+from env.myEnv import AirBattle
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -351,7 +351,7 @@ if __name__ == '__main__':
     all_ep_r = []
 
     if OUTPUT_GRAPH:
-        tf.summary.FileWriter("logs/", sess.graph)
+        tf.summary.FileWriter("../logs/", sess.graph)
 
     for i in range(MAX_EPISODES):
         if i % 50 == 0:

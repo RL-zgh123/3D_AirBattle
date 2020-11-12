@@ -1,15 +1,12 @@
 import argparse
 import numpy as np
 import tensorflow as tf
-from myEnv import AirBattle
+from env.myEnv import AirBattle
 from collections import deque
 import matplotlib.pyplot as plt
 
 np.random.seed(1)
 tf.set_random_seed(1)
-
-
-#####################  hyper parameters  ####################
 
 EXPLORE = 10
 RANDOM_DECAY = 0.9
@@ -18,6 +15,7 @@ MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
+LR_S = 0.0005 # learning rate for assistnet
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
@@ -35,6 +33,7 @@ parser.add_argument('--gap', type=int, default=RANDOM_DECAY_GAP)
 parser.add_argument('--batch', type=int, default=BATCH_SIZE)
 parser.add_argument('--esteps', type=int, default=MAX_EP_STEPS)
 parser.add_argument('--memory', type=int, default=MEMORY_CAPACITY)
+parser.add_argument('--lrs', type=float, default=LR_S)
 parser.add_argument('--lra', type=float, default=LR_A)
 parser.add_argument('--lrc', type=float, default=LR_C)
 parser.add_argument('--gamma', type=float, default=GAMMA)
@@ -43,30 +42,90 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\n'.format(
+        '\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_S:{}\nLR_A: {}\nLR_C: {}\ngamma: {}\n'.format(
             args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
-            args.lra, args.lrc, args.gamma))
+            args.lrs, args.lra, args.lrc, args.gamma))
 
+class AssistNet(object):
+    def __init__(self, sess, state_dim, phi_dim, action_dim, learning_rate):
+        self.sess = sess
+        self.a_dim = action_dim
+        self.s_dim = state_dim
+        self.p_dim = phi_dim
+        self.lr = learning_rate
+
+        self.init_w = tf.random_normal_initializer(0., 0.3)
+        self.init_b = tf.constant_initializer(0.1)
+
+        # build placeholder
+        self._build_ph()
+
+        # build phi(s)
+        with tf.variable_scope("phi") as scope:
+            self.phi_s = self._build_phi(self.s)
+            scope.reuse_variables()
+            self.phi_s_ = self._build_phi(self.s_)
+
+        # predict action
+        with tf.variable_scope("predict_action") as scope:
+            self.pre_a = self._predict_action()
+
+        self._build_train_op()
+
+    def _build_ph(self):
+        self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
+        self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
+        self.a = tf.placeholder(tf.float32, shape=[None, action_dim], name='a')
+
+    def _build_phi(self, s, scope='net0', trainable=True):
+        with tf.variable_scope(scope) as scope:
+            phi = tf.layers.dense(s, self.p_dim, activation=tf.nn.relu,
+                                  kernel_initializer=self.init_w,
+                                  bias_initializer=self.init_b,
+                                  name='l1',
+                                  trainable=trainable)
+        return phi
+
+    def _predict_action(self, scope='net0', trainable=True):
+        with tf.variable_scope(scope) as scope:
+            unit_phi_s = tf.concat([self.phi_s, self.phi_s_], axis=1)
+            pre_a = tf.layers.dense(unit_phi_s, self.a_dim, activation=tf.nn.relu,
+                                    kernel_initializer=self.init_w,
+                                    bias_initializer=self.init_b,
+                                    name='l2',
+                                    trainable=trainable
+                                    )
+        return pre_a
+
+    def _build_train_op(self):
+        self.loss = tf.reduce_mean(tf.squared_difference(self.a, self.pre_a))
+        self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
+
+    def learn(self, s, s_, a):
+        self.sess.run(self.train_op, {self.s: s, self.s_: s_, self.a: a})
+
+    def get_phi(self, s):
+        return self.sess.run(self.phi_s, {self.s: s[np.newaxis, :]})
 
 ###############################  Actor  ####################################
 
 
 class Actor(object):
-    def __init__(self, sess, action_dim, action_bound, learning_rate, replacement):
+    def __init__(self, sess, phi_dim, action_dim, action_bound, learning_rate, replacement):
         self.sess = sess
         self.a_dim = action_dim
+        self.p_dim = phi_dim
         self.action_bound = action_bound
         self.lr = learning_rate
         self.replacement = replacement
         self.t_replace_counter = 0
 
-        self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
-        self.r = tf.placeholder(tf.float32, [None, 1], name='r')
-        self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
+        self.phi_s = tf.placeholder(tf.float32, shape=[None, phi_dim], name='phi_s')
+        self.phi_s_ = tf.placeholder(tf.float32, shape=[None, phi_dim], name='phi_s_')
 
         with tf.variable_scope('Actor'):
-            self.a = self._build_net(self.s, scope='eval_net', trainable=True)
-            self.a_ = self._build_net(self.s_, scope='target_net', trainable=False)
+            self.a = self._build_net(self.phi_s, scope='eval_net', trainable=True)
+            self.a_ = self._build_net(self.phi_s_, scope='target_net', trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/eval_net')
@@ -82,7 +141,7 @@ class Actor(object):
                                            self.replacement['tau'] * e)
                                  for t, e in zip(self.t_params, self.e_params)]
 
-    def _build_net(self, s, scope, trainable):
+    def _build_net(self, phi_s, scope, trainable):
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
             init_b = tf.constant_initializer(0.1)
@@ -99,8 +158,8 @@ class Actor(object):
                                        name='scaled_a')  # Scale output to -action_bound to action_bound
         return scaled_a
 
-    def learn(self, s):  # batch update
-        self.sess.run(self.train_op, feed_dict={self.s: s})
+    def learn(self, phi_s):  # batch update
+        self.sess.run(self.train_op, feed_dict={self.phi_s: phi_s})
 
         if self.replacement['name'] == 'soft':
             self.sess.run(self.soft_replace)
@@ -109,9 +168,8 @@ class Actor(object):
                 self.sess.run(self.hard_replace)
             self.t_replace_counter += 1
 
-    def choose_action(self, s):
-        s = s[np.newaxis, :]  # single state
-        return self.sess.run(self.a, feed_dict={self.s: s})[0]  # single action
+    def choose_action(self, phi_s):
+        return self.sess.run(self.a, feed_dict={self.phi_s: phi_s})[0]  # single action
 
     def add_grad_to_graph(self, a_grads):
         with tf.variable_scope('policy_grads'):
@@ -132,23 +190,23 @@ class Actor(object):
 ###############################  Critic  ####################################
 
 class Critic(object):
-    def __init__(self, sess, state_dim, action_dim, learning_rate, gamma,
-                 replacement, a, a_, s, s_):
+    def __init__(self, sess, phi_dim, action_dim, learning_rate, gamma,
+                 replacement, a, a_, phi, phi_):
         self.sess = sess
-        self.s_dim = state_dim
+        self.p_dim = phi_dim
         self.a_dim = action_dim
         self.lr = learning_rate
         self.gamma = gamma
         self.replacement = replacement
 
-        self.s = s
+        self.phi_s = phi
         self.r = tf.placeholder(tf.float32, [None, 1], name='r')
-        self.s_ = s_
+        self.phi_s_ = phi_
 
         with tf.variable_scope('Critic'):
             self.a = a
-            self.q = self._build_net(self.s, self.a, 'eval_net', trainable=True)
-            self.q_ = self._build_net(self.s_, a_, 'target_net',
+            self.q = self._build_net(self.phi_s, self.a, 'eval_net', trainable=True)
+            self.q_ = self._build_net(self.phi_s_, a_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -178,14 +236,14 @@ class Critic(object):
                                                self.replacement['tau'] * e)
                                      for t, e in zip(self.t_params, self.e_params)]
 
-    def _build_net(self, s, a, scope, trainable):
+    def _build_net(self, phi_s, a, scope, trainable):
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.1)
             init_b = tf.constant_initializer(0.1)
 
             with tf.variable_scope('l1'):
                 n_l1 = 30
-                w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1],
+                w1_s = tf.get_variable('w1_s', [self.p_dim, n_l1],
                                        initializer=init_w, trainable=trainable)
                 w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1],
                                        initializer=init_w, trainable=trainable)
@@ -199,9 +257,9 @@ class Critic(object):
                                     trainable=trainable)  # Q(s,a)
         return q
 
-    def learn(self, s, a, r, s_):
+    def learn(self, phi_s, a, r, phi_s_):
         self.sess.run(self.train_op,
-                      feed_dict={self.s: s, self.a: a, self.r: r, self.s_: s_})
+                      feed_dict={self.phi_s: phi_s, self.a: a, self.r: r, self.phi_s_: phi_s_})
         if self.replacement['name'] == 'soft':
             self.sess.run(self.soft_replacement)
         else:
