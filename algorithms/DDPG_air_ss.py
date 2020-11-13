@@ -1,10 +1,11 @@
 import argparse
+import sys
 from collections import deque
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import sys
+
 sys.path.append('..')
 
 from env.myEnv import AirBattle
