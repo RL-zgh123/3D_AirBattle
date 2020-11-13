@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import tensorflow as tf
-from env.myEnv import AirBattle
+from envs.myEnv import AirBattle
 from collections import deque
 import matplotlib.pyplot as plt
 

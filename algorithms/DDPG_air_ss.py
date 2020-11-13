@@ -8,7 +8,7 @@ import tensorflow as tf
 
 sys.path.append('..')
 
-from env.myEnv import AirBattle
+from envs.myEnv import AirBattle
 
 np.random.seed(1)
 tf.set_random_seed(1)
