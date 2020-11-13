@@ -1,9 +1,13 @@
 import argparse
+from collections import deque
+
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import sys
+sys.path.append('..')
+
 from env.myEnv import AirBattle
-from collections import deque
-import matplotlib.pyplot as plt
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -15,7 +19,7 @@ MAX_EPISODES = 3000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
-LR_S = 0.001 # learning rate for assistnet
+LR_S = 0.001  # learning rate for assistnet
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
@@ -46,21 +50,21 @@ def print_args():
             args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
             args.lrs, args.lra, args.lrc, args.gamma))
 
+
 class AssistNet(object):
-    def __init__(self, sess, state_dim, phi_dim, action_dim, learning_rate):
+    def __init__(self, sess, state_dim, phi_dim, action_dim, action_bound,
+                 learning_rate):
         self.sess = sess
         self.a_dim = action_dim
         self.s_dim = state_dim
         self.p_dim = phi_dim
         self.lr = learning_rate
+        self.action_bound = action_bound
 
         self.init_w = tf.random_normal_initializer(0., 0.3)
         self.init_b = tf.constant_initializer(0.1)
-
-        # build placeholder
         self._build_ph()
 
-        # build phi(s)
         with tf.variable_scope("phi") as scope:
             self.phi_s = self._build_phi(self.s)
             scope.reuse_variables()
@@ -89,13 +93,14 @@ class AssistNet(object):
     def _predict_action(self, scope='net0', trainable=True):
         with tf.variable_scope(scope) as scope:
             unit_phi_s = tf.concat([self.phi_s, self.phi_s_], axis=1)
-            pre_a = tf.layers.dense(unit_phi_s, self.a_dim, activation=tf.nn.relu,
+            pre_a = tf.layers.dense(unit_phi_s, self.a_dim, activation=tf.nn.tanh,
                                     kernel_initializer=self.init_w,
                                     bias_initializer=self.init_b,
                                     name='l2',
                                     trainable=trainable
                                     )
-        return pre_a
+            scaled_pre_a = tf.multiply(pre_a, self.action_bound, name='scaled_pre_a')
+        return scaled_pre_a
 
     def _build_train_op(self):
         self.loss = tf.reduce_mean(tf.squared_difference(self.a, self.pre_a))
@@ -107,11 +112,13 @@ class AssistNet(object):
     def get_phi(self, s):
         return self.sess.run(self.phi_s, {self.s: s[np.newaxis, :]})
 
+
 ###############################  Actor  ####################################
 
 
 class Actor(object):
-    def __init__(self, sess, phi_dim, action_dim, action_bound, learning_rate, replacement):
+    def __init__(self, sess, phi_dim, action_dim, action_bound, learning_rate,
+                 replacement):
         self.sess = sess
         self.a_dim = action_dim
         self.p_dim = phi_dim
@@ -121,11 +128,13 @@ class Actor(object):
         self.t_replace_counter = 0
 
         self.phi_s = tf.placeholder(tf.float32, shape=[None, phi_dim], name='phi_s')
-        self.phi_s_ = tf.placeholder(tf.float32, shape=[None, phi_dim], name='phi_s_')
+        self.phi_s_ = tf.placeholder(tf.float32, shape=[None, phi_dim],
+                                     name='phi_s_')
 
         with tf.variable_scope('Actor'):
             self.a = self._build_net(self.phi_s, scope='eval_net', trainable=True)
-            self.a_ = self._build_net(self.phi_s_, scope='target_net', trainable=False)
+            self.a_ = self._build_net(self.phi_s_, scope='target_net',
+                                      trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                           scope='Actor/eval_net')
@@ -169,7 +178,8 @@ class Actor(object):
             self.t_replace_counter += 1
 
     def choose_action(self, phi_s):
-        return self.sess.run(self.a, feed_dict={self.phi_s: phi_s})[0]  # single action
+        return self.sess.run(self.a, feed_dict={self.phi_s: phi_s})[
+            0]  # single action
 
     def add_grad_to_graph(self, a_grads):
         with tf.variable_scope('policy_grads'):
@@ -259,20 +269,14 @@ class Critic(object):
 
     def learn(self, phi_s, a, r, phi_s_):
         self.sess.run(self.train_op,
-                      feed_dict={self.phi_s: phi_s, self.a: a, self.r: r, self.phi_s_: phi_s_})
+                      feed_dict={self.phi_s: phi_s, self.a: a, self.r: r,
+                                 self.phi_s_: phi_s_})
         if self.replacement['name'] == 'soft':
             self.sess.run(self.soft_replacement)
         else:
             if self.t_replace_counter % self.replacement['rep_iter_c'] == 0:
                 self.sess.run(self.hard_replacement)
             self.t_replace_counter += 1
-
-
-
-
-
-
-
 
 
 #####################  Memory  ####################
@@ -294,6 +298,7 @@ class Memory(object):
         indices = np.random.choice(self.capacity, size=n)
         return self.data[indices, :]
 
+
 if __name__ == '__main__':
     env = AirBattle()
     phi_dim = 30
@@ -302,14 +307,15 @@ if __name__ == '__main__':
     action_bound = env.action_bound  # action的激活函数是tanh
 
     sess = tf.Session()
-    assist = AssistNet(sess, state_dim, phi_dim, action_dim, args.lrs)
+    assist = AssistNet(sess, state_dim, phi_dim, action_dim, action_bound, args.lrs)
     actor = Actor(sess, phi_dim, action_dim, action_bound, args.lra, REPLACEMENT)
-    critic = Critic(sess, phi_dim, action_dim, args.lrc, args.gamma, REPLACEMENT, actor.a,
+    critic = Critic(sess, phi_dim, action_dim, args.lrc, args.gamma, REPLACEMENT,
+                    actor.a,
                     actor.a_, actor.phi_s, actor.phi_s_)
     actor.add_grad_to_graph(critic.a_grads)
     sess.run(tf.global_variables_initializer())
 
-    M = Memory(args.memory, dims=2 * (state_dim+phi_dim) + action_dim + 1)
+    M = Memory(args.memory, dims=2 * (state_dim + phi_dim) + action_dim + 1)
     mr = deque(maxlen=200)
     all_ep_r = []
 
@@ -341,10 +347,10 @@ if __name__ == '__main__':
                     args.explore *= args.decay  # decay the action randomness
                 b_M = M.sample(BATCH_SIZE)
                 b_s = b_M[:, :state_dim]
-                b_ps = b_M[:, state_dim: state_dim+phi_dim]
-                b_a = b_M[:, state_dim+phi_dim: state_dim + action_dim+phi_dim]
-                b_r = b_M[:, -state_dim-phi_dim - 1: -state_dim-phi_dim]
-                b_s_ = b_M[:, -state_dim-phi_dim:-phi_dim]
+                b_ps = b_M[:, state_dim: state_dim + phi_dim]
+                b_a = b_M[:, state_dim + phi_dim: state_dim + action_dim + phi_dim]
+                b_r = b_M[:, -state_dim - phi_dim - 1: -state_dim - phi_dim]
+                b_s_ = b_M[:, -state_dim - phi_dim:-phi_dim]
                 b_ps_ = b_M[:, -phi_dim:]
 
                 assist.learn(b_s, b_s_, b_a)

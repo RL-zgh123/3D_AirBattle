@@ -1,9 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from env.myEnv import AirBattle
-from collections import deque
-import matplotlib.pyplot as plot
-
+import gym
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -15,13 +12,13 @@ MAX_EP_STEPS = 200
 LR_S = 0.0002  # learning rate for assistNet
 LR_A = 0.002  # learning rate for actor
 LR_C = 0.002  # learning rate for critic
-GAMMA = 0.99  # reward discount
+GAMMA = 0.9  # reward discount
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
 ][1]  # you can try different target replacement strategies
-MEMORY_CAPACITY = 100000
-BATCH_SIZE = 128
+MEMORY_CAPACITY = 10000
+BATCH_SIZE = 32
 
 RENDER = False
 OUTPUT_GRAPH = True

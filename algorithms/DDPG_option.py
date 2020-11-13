@@ -73,11 +73,9 @@ class Option(object):
         # single structure
         with tf.variable_scope('option') as scope:
             self.o_v = self._build_net(self.s)
-            # self.o = tf.reshape(tf.argmax(self.o_v, 1), [-1, 1])
             self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
-            # self.o_ = tf.reshape(tf.argmax(self.o_v_, 1), [-1, 1])
             self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                         scope='option/net')
