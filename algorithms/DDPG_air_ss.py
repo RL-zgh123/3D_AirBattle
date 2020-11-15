@@ -90,6 +90,28 @@ class AssistNet(object):
                                   trainable=trainable)
         return phi
 
+    def _predict_action0(self, scope='net0', trainable=True):
+        with tf.variable_scope(scope) as scope:
+            # unit_phi_s = tf.concat([self.phi_s, self.phi_s_], axis=1)
+            # pre_a = tf.layers.dense(unit_phi_s, self.a_dim, activation=tf.nn.tanh,
+            #                         kernel_initializer=self.init_w,
+            #                         bias_initializer=self.init_b,
+            #                         name='l2',
+            #                         trainable=trainable
+            #                         )
+
+            w_p = tf.get_variable('w_p', [self.p_dim, self.a_dim],
+                                  initializer=self.init_w, trainable=trainable)
+            w_p_ = tf.get_variable('w_p_', [self.p_dim, self.a_dim],
+                                   initializer=self.init_w, trainable=trainable)
+            b = tf.get_variable('b', [1, self.a_dim], initializer=self.init_b,
+                                trainable=trainable)
+            pre_a = tf.nn.tanh(
+                tf.matmul(self.phi_s, w_p) + tf.matmul(self.phi_s_, w_p_) + b)
+
+            scaled_pre_a = tf.multiply(pre_a, self.action_bound, name='scaled_pre_a')
+        return scaled_pre_a
+
     def _predict_action(self, scope='net0', trainable=True):
         with tf.variable_scope(scope) as scope:
             # unit_phi_s = tf.concat([self.phi_s, self.phi_s_], axis=1)
@@ -100,10 +122,19 @@ class AssistNet(object):
             #                         trainable=trainable
             #                         )
 
-            w_p = tf.get_variable('w_p', [self.p_dim, self.a_dim], initializer=self.init_w, trainable=trainable)
-            w_p_ = tf.get_variable('w_p_', [self.p_dim, self.a_dim], initializer=self.init_w, trainable=trainable)
-            b = tf.get_variable('b', [1, self.a_dim], initializer=self.init_b, trainable=trainable)
-            pre_a = tf.nn.tanh(tf.matmul(self.phi_s, w_p) + tf.matmul(self.phi_s_, w_p_) + b)
+            w_p = tf.get_variable('w_p', [self.p_dim, self.p_dim],
+                                  initializer=self.init_w, trainable=trainable)
+            w_p_ = tf.get_variable('w_p_', [self.p_dim, self.p_dim],
+                                   initializer=self.init_w, trainable=trainable)
+            b = tf.get_variable('b', [1, self.p_dim], initializer=self.init_b,
+                                trainable=trainable)
+            h1 = tf.nn.tanh(
+                tf.matmul(self.phi_s, w_p) + tf.matmul(self.phi_s_, w_p_) + b)
+
+            pre_a = tf.layers.dense(h1,self.a_dim, activation=tf.nn.tanh,
+                                    kernel_initializer=self.init_w,
+                                    bias_initializer=self.init_b,
+                                    trainable=trainable)
 
             scaled_pre_a = tf.multiply(pre_a, self.action_bound, name='scaled_pre_a')
         return scaled_pre_a
@@ -113,6 +144,7 @@ class AssistNet(object):
         self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
     def learn(self, s, s_, a):
+        # print(self.sess.run(self.loss, {self.s: s, self.s_: s_, self.a: a}))
         self.sess.run(self.train_op, {self.s: s, self.s_: s_, self.a: a})
 
     def get_phi(self, s):
