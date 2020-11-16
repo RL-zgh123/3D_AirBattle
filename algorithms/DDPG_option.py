@@ -362,7 +362,7 @@ if __name__ == '__main__':
         if RENDER:
             env.render()
 
-        s = env.reset()
+        s, info = env.reset()
         ep_reward = 0
 
         for j in range(args.esteps):

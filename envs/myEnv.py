@@ -83,7 +83,9 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities) * self.n_actions])
         self._count = 0
-        self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy), 'N_hinder': len(self.hinder), 'action_dim': self.n_actions, 'entity_dim': 2*self.n_actions+1}
+        self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy),
+                     'N_hinder': len(self.hinder), 'action_dim': self.n_actions,
+                     'entity_dim': 2 * self.n_actions + 1}
 
     # detect collision
     # no requirement for entity0 and entity1
@@ -206,7 +208,7 @@ class AirBattle(object):
                     break
             if not flag:
                 break
-        return self._get_state()
+        return self._get_state(), self.info
 
     # return o_n_next, a_n, r_n, i_n
     def step(self, act0, act1):
@@ -237,7 +239,7 @@ class AirBattle(object):
                     rebound0, _ = self._rebound(self.agents[i], self.entities[j])
                     self.agents[i].pos[:3] += rebound0
 
-        return self._get_state(), 0, done, None
+        return self._get_state(), 0, done, self.info
 
     def _store_state(self):
         state = np.array([])
@@ -301,6 +303,7 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
         self._count += 1
+
 
 if __name__ == '__main__':
     exp = AirBattle()
