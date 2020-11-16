@@ -83,6 +83,7 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities) * self.n_actions])
         self._count = 0
+        self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy), 'N_hinder': len(self.hinder), 'action_dim': self.n_actions, 'entity_dim': 2*self.n_actions+1}
 
     # detect collision
     # no requirement for entity0 and entity1
@@ -300,3 +301,6 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
         self._count += 1
+
+if __name__ == '__main__':
+    exp = AirBattle()

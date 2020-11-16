@@ -3,7 +3,11 @@ from collections import deque
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import sys
+
+sys.path.append('..')
 from envs.myEnv import AirBattle
+from algorithms.Offense import Offense
 
 np.random.seed(1)
 tf.set_random_seed(1)

@@ -1,8 +1,8 @@
 import numpy as np
 class Offense(object):
-    def __init__(self, action_bound, i_enemy = 0):
+    def __init__(self, action_bound, i_enemy = 0, factor=0.25):
         self.i_enemy = i_enemy
-        self.action_bound = action_bound * 0.25 # reserve optimization space for intelligent agent friend
+        self.action_bound = action_bound * factor # reserve optimization space for intelligent agent friend
 
     def get_action(self, s, info):
         n_f = info['N_friend']
