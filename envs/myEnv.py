@@ -228,7 +228,7 @@ class AirBattle(object):
                                                         self.entities[j])
                     if done:
                         reward = 10 if win == self.friend[0] else -10
-                        return self._get_state(), reward, done, None
+                        return self._get_state(), reward, done, self.info
                     else:
                         rebound0, rebound1 = self._rebound(self.agents[i],
                                                            self.entities[j])
@@ -303,6 +303,11 @@ class AirBattle(object):
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities)] * self.n_actions)
         self._count += 1
+
+    # increase enemy's max acc
+    def reinforce_enemy(self, factor=1.0):
+        for i in range(self.info['N_enemy']):
+            self.enemy[i].max_acc *= factor
 
 
 if __name__ == '__main__':

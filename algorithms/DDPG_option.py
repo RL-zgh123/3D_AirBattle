@@ -16,7 +16,7 @@ FIG_NUM = 0
 EXPLORE = 10
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 2500
+MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -24,7 +24,8 @@ LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
-FACTOR = 5  # reward shaping factor
+RFACTOR = 5  # reward shaping factor
+AFACTOR = 0.25 # offense action bound shaping factor
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
@@ -44,19 +45,20 @@ parser.add_argument('--lro', type=float, default=LR_O)
 parser.add_argument('--lra', type=float, default=LR_A)
 parser.add_argument('--lrc', type=float, default=LR_C)
 parser.add_argument('--gamma', type=float, default=GAMMA)
-parser.add_argument('--factor', type=float, default=FACTOR)
+parser.add_argument('--r_factor', type=float, default=RFACTOR)
+parser.add_argument('--a_factor', type=float, default=AFACTOR)
 args = parser.parse_args()
 
 
 def print_args():
     print(
-        '\nfig_num: {}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nfactor: {}\n'.format(
+        '\nfig_num: {}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
             args.fig, args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
-            args.lro, args.lra, args.lrc, args.gamma, args.factor))
+            args.lro, args.lra, args.lrc, args.gamma, args.r_factor, args.a_factor))
 
 
 class Option(object):
-    def __init__(self, sess, option_dim, learning_rate):
+    def __init__(self, sess, option_dim, learning_rate=0.001):
         self.sess = sess
         self.op_dim = option_dim
         self.lr = learning_rate
@@ -329,10 +331,12 @@ class Memory(object):
 
 if __name__ == '__main__':
     env = AirBattle()
+    env.reinforce_enemy(factor=args.a_factor)
     option_dim = 2
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
+    offense = Offense(action_bound, 0, args.a_factor)
 
     sess = tf.Session()
     option = Option(sess, option_dim, args.lro)
@@ -371,7 +375,10 @@ if __name__ == '__main__':
             a = actor.choose_action(s, o[np.newaxis, :])
             a = np.clip(np.random.normal(a, args.explore), -2,
                         2)  # add randomness for exploration
-            a0 = np.random.rand(action_dim)
+
+            # a0 = np.random.rand(action_dim)
+            a0 = offense.get_action(s, info)
+
             s_, r, done, info = env.step(a, a0)
             o_ = option.get_option(s_)
             o_v_ = option.get_option_value(s_)
@@ -380,7 +387,7 @@ if __name__ == '__main__':
             # o=0 encouraging offense, while o=1 encouraging defense
             r1 = r
             if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
-                r1 /= args.factor
+                r1 /= args.r_factor
 
             M.store_transition(s, o, o_v, a, r1, s_, o_, o_v_)
 
