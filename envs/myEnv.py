@@ -308,6 +308,7 @@ class AirBattle(object):
     def reinforce_enemy(self, factor=1.0):
         for i in range(self.info['N_enemy']):
             self.enemy[i].max_acc *= factor
+            self.enemy[i].max_vel *= factor
 
 
 if __name__ == '__main__':

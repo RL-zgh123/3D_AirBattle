@@ -430,3 +430,11 @@ if __name__ == '__main__':
     plt.ylabel('Moving averaged episode reward')
     plt.savefig('result_{}.jpg'.format(args.fig))
     plt.show()
+
+    # save sess as ckpt
+    relative_path = '../results'
+    file_name = args.fig
+    file_path = '{}/{}.ckpt'.format(relative_path, file_name)
+    saver = tf.train.Saver()
+    saver.save(sess, file_path)
+    print('Session has been saved sucessfully in {}'.format(file_path))
