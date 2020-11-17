@@ -1,0 +1,2 @@
+0：没有reward shaping处理
+fx: 经过了reward shaping, 对应系数为x
