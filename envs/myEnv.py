@@ -81,7 +81,7 @@ class AirBattle(object):
         self.n_features = self._get_state().shape[0]
         self.action_bound = self.friend[0].max_acc
         self._cursor = 0
-        self._store = np.empty([10000] + [len(self.entities) * self.n_actions])
+        self._store = np.empty([10000] + [len(self.entities) * self.n_actions + 1]) # +1 for option
         self._count = 0
         self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy),
                      'N_hinder': len(self.hinder), 'action_dim': self.n_actions,
@@ -211,9 +211,9 @@ class AirBattle(object):
         return self._get_state(), self.info
 
     # return o_n_next, a_n, r_n, i_n
-    def step(self, act0, act1):
+    def step(self, act0, act1, option):
         self._update_state(act0, act1)
-        self._store_state()
+        self._store_state(option)
         done = False
 
         # rebound judgement
@@ -241,10 +241,11 @@ class AirBattle(object):
 
         return self._get_state(), 0, done, self.info
 
-    def _store_state(self):
+    def _store_state(self, option):
         state = np.array([])
         for entity in self.entities:
             state = np.concatenate((state, entity.pos), axis=0)
+        state = np.append(state, option)
         self._store[self._cursor % self._store.shape[0]] = state
         self._cursor += 1
 
@@ -261,7 +262,8 @@ class AirBattle(object):
 
         tf = self._store[num][: self.n_actions]
         te = self._store[num][self.n_actions: 2 * self.n_actions]
-        tc = self._store[num][-self.n_actions:]
+        tc = self._store[num][-self.n_actions-1:-1]
+        op = self._store[num][-1:]
 
         pf = self._rotate([pf[0], pf[1], pf[2], tf[3], tf[4], tf[5]])
         pe = self._rotate([pe[0], pe[1], pe[2], te[3], te[4], te[5]])
@@ -270,6 +272,9 @@ class AirBattle(object):
         ax.plot_surface(pe[0] + te[0], pe[1] + te[1], pe[2] + te[2],
                         color='lightyellow')
         ax.plot_surface(pc[0] + tc[0], pc[1] + tc[1], pc[2] + tc[2], color='navy')
+
+        ax.text2D(0.75, 0.75, "option={}".format(op[0]), transform=ax.transAxes)
+
         return ax
 
     def _generate_ball(self, radius, completed=True):
@@ -298,8 +303,6 @@ class AirBattle(object):
         ani = FuncAnimation(fig, self._update, num, fargs=(pf, pe, pc),
                             interval=1, blit=False)
         # plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
-
-
 
         plt.show()
         plt.close()

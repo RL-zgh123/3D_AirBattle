@@ -17,7 +17,7 @@ FIG_NUM = 0
 EXPLORE = 10
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 2000
+MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -35,6 +35,7 @@ RENDER = False
 OUTPUT_GRAPH = True
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--episode', type=int, default=MAX_EPISODES)
 parser.add_argument('--fig', type=int, default=FIG_NUM)
 parser.add_argument('--explore', type=float, default=EXPLORE)
 parser.add_argument('--decay', type=float, default=RANDOM_DECAY)
@@ -53,8 +54,8 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        '\nfig_num: {}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
-            args.fig, args.explore, args.decay, args.gap, args.batch, args.esteps,
+        '\nfig_num: {}\nmax_episodes:{}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
+            args.fig, args.episode, args.explore, args.decay, args.gap, args.batch, args.esteps,
             args.memory,
             args.lro, args.lra, args.lrc, args.gamma, args.r_factor, args.a_factor))
 
@@ -81,10 +82,12 @@ class Option(object):
         # single structure
         with tf.variable_scope('option') as scope:
             self.o_v = self._build_net(self.s)
-            self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
+            # self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
+            self.o = tf.random.categorical(self.o_v, 1)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
-            self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
+            # self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
+            self.o_ = tf.random.categorical(self.o_v_, 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                         scope='option/net')
 
@@ -382,7 +385,7 @@ if __name__ == '__main__':
             # a0 = np.random.rand(action_dim)
             a0 = offense.get_action(s, info)
 
-            s_, r, done, info = env.step(a, a0)
+            s_, r, done, info = env.step(a, a0, o)
             o_ = option.get_option(s_)
             o_v_ = option.get_option_value(s_)
 

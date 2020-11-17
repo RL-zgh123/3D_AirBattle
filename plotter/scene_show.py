@@ -37,7 +37,7 @@ class Model(object):
         op = self.option.get_option(o_n)
         a0 = self.actor.choose_action(o_n, op[np.newaxis, :])
         a1 = self.offense.get_action(o_n, info)
-        return a0, a1
+        return a0, a1, op
 
     # one single rollout
     def rollout(self):
@@ -49,8 +49,9 @@ class Model(object):
         while True:
             self.step_count += 1
             steps += 1
-            act0, act1 = self._get_action(o_n, info)
-            o_n_next, r_n, d_n, info = self.env.step(act0, act1)
+            act0, act1, option = self._get_action(o_n, info)
+            print(option)
+            o_n_next, r_n, d_n, info = self.env.step(act0, act1, option)
             r_all += r_n
             o_n = o_n_next
             if steps == self.max_steps or d_n:
@@ -70,7 +71,7 @@ if __name__ == '__main__':
         steps, r_all = model.rollout()
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
         if r_all > 0:
-            # model.env.render(steps)
+            model.env.render(steps)
             dic['win'] += 1
         elif r_all == 0:
             dic['equal'] += 1
