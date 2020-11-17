@@ -17,7 +17,7 @@ FIG_NUM = 0
 EXPLORE = 10
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 4000
+MAX_EPISODES = 2000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -60,7 +60,7 @@ def print_args():
 
 
 class Option(object):
-    def __init__(self, sess, option_dim, learning_rate=0.001):
+    def __init__(self, sess, option_dim, state_dim, learning_rate=0.001):
         self.sess = sess
         self.op_dim = option_dim
         self.lr = learning_rate
@@ -127,10 +127,11 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, action_bound, s, s_, o,
+    def __init__(self, sess, option_dim, action_dim, state_dim, action_bound, s, s_, o,
                  o_, learning_rate=0.001, replacement=REPLACEMENT):
         self.sess = sess
         self.a_dim = action_dim
+        self.s_dim = state_dim
         self.action_bound = action_bound
         self.lr = learning_rate
         self.replacement = replacement
@@ -166,17 +167,17 @@ class Actor(object):
         self.option_onehot = tf.squeeze(tf.one_hot(o, self.op_dim, dtype=tf.float32),
                                         [1])
         # print('onehot', self.option_onehot)
-        s = tf.reshape(s, [-1, 1, state_dim])
+        s = tf.reshape(s, [-1, 1, self.s_dim])
         with tf.variable_scope(scope):
             init_w = tf.random_normal_initializer(0., 0.3)
             init_b = tf.constant_initializer(0.1)
             nl1 = 30
 
-            w1 = tf.get_variable('w1', [self.op_dim, state_dim * nl1],
+            w1 = tf.get_variable('w1', [self.op_dim, self.s_dim * nl1],
                                  initializer=init_w)
             b1 = tf.get_variable('b1', [self.op_dim, 1 * nl1], initializer=init_b)
             w1_onehot = tf.reshape(tf.matmul(self.option_onehot, w1),
-                                   [-1, state_dim, nl1])
+                                   [-1, self.s_dim, nl1])
             b1_onehot = tf.reshape(tf.matmul(self.option_onehot, b1), [-1, 1, nl1])
             h1 = tf.nn.relu(tf.matmul(s, w1_onehot) + b1_onehot)
 
@@ -341,8 +342,8 @@ if __name__ == '__main__':
     offense = Offense(action_bound, 0, args.a_factor)
 
     sess = tf.Session()
-    option = Option(sess, option_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, action_bound,
+    option = Option(sess, option_dim, state_dim, args.lro)
+    actor = Actor(sess, option_dim, action_dim, state_dim, action_bound,
                   option.s, option.s_, option.o,
                   option.o_, args.lra, REPLACEMENT)
     critic = Critic(sess, option_dim, state_dim, action_dim, args.gamma,

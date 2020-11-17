@@ -298,6 +298,9 @@ class AirBattle(object):
         ani = FuncAnimation(fig, self._update, num, fargs=(pf, pe, pc),
                             interval=1, blit=False)
         # plt.savefig('demo{}_{}.gif'.format(self._count * gap, (self._count + 1) * gap))
+
+
+
         plt.show()
         plt.close()
         self._cursor = 0

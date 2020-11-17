@@ -6,7 +6,7 @@ import tensorflow as tf
 sys.path.append('..')
 from envs.myEnv import AirBattle
 from algorithms.DDPG_option import Option, Actor
-from algorithms.offense import Offense
+from algorithms.Offense import Offense
 
 
 class Model(object):
@@ -19,12 +19,13 @@ class Model(object):
         self.offense = Offense(action_bound, 0)
 
         sess = tf.Session()
-        self.option = Option(sess, option_dim)
-        self.actor = Actor(sess, option_dim, action_dim, action_bound, self.option.s,
+        self.option = Option(sess, option_dim, state_dim)
+        self.actor = Actor(sess, option_dim, action_dim, state_dim, action_bound, self.option.s,
                            self.option.s_, self.option.o, self.option.o_)
         # sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver()
         saver.restore(sess, file_path)
+        print('Successfully load session data!')
 
         self.step_count = 0
         self.max_steps = 200
@@ -60,7 +61,7 @@ class Model(object):
 if __name__ == '__main__':
     iterations = 100
     relative_path = '../results'
-    file_name = 0
+    file_name = 4
     file_path = '{}/{}.ckpt'.format(relative_path, file_name)
     model = Model(file_path)
     dic = {'win': 0, 'equal': 0, 'lose': 0}
@@ -69,7 +70,7 @@ if __name__ == '__main__':
         steps, r_all = model.rollout()
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
         if r_all > 0:
-            model.env.render(steps)
+            # model.env.render(steps)
             dic['win'] += 1
         elif r_all == 0:
             dic['equal'] += 1
