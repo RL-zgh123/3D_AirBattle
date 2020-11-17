@@ -1,9 +1,10 @@
 import argparse
+import sys
 from collections import deque
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import sys
 
 sys.path.append('..')
 from envs.myEnv import AirBattle
@@ -25,7 +26,7 @@ LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
 RFACTOR = 5  # reward shaping factor
-AFACTOR = 0.25 # offense action bound shaping factor
+AFACTOR = 0.25  # offense action bound shaping factor
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
@@ -53,7 +54,8 @@ args = parser.parse_args()
 def print_args():
     print(
         '\nfig_num: {}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
-            args.fig, args.explore, args.decay, args.gap, args.batch, args.esteps, args.memory,
+            args.fig, args.explore, args.decay, args.gap, args.batch, args.esteps,
+            args.memory,
             args.lro, args.lra, args.lrc, args.gamma, args.r_factor, args.a_factor))
 
 
@@ -125,9 +127,8 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, action_bound, learning_rate,
-                 replacement, s, s_, o,
-                 o_):
+    def __init__(self, sess, option_dim, action_dim, action_bound, s, s_, o,
+                 o_, learning_rate=0.001, replacement=REPLACEMENT):
         self.sess = sess
         self.a_dim = action_dim
         self.action_bound = action_bound
@@ -221,8 +222,9 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, sess, option_dim, state_dim, action_dim, learning_rate, gamma,
-                 replacement, a, a_, s, s_, o_v, o_v_):
+    def __init__(self, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
+                 o_v, o_v_, learning_rate,
+                 replacement):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -340,13 +342,13 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     option = Option(sess, option_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, action_bound, args.lra, REPLACEMENT,
+    actor = Actor(sess, option_dim, action_dim, action_bound,
                   option.s, option.s_, option.o,
-                  option.o_)
-    critic = Critic(sess, option_dim, state_dim, action_dim, args.lrc, args.gamma,
-                    REPLACEMENT,
-                    actor.a,
-                    actor.a_, option.s, option.s_, option.o_v, option.o_v_)
+                  option.o_, args.lra, REPLACEMENT)
+    critic = Critic(sess, option_dim, state_dim, action_dim, args.gamma,
+                    actor.a, actor.a_, option.s, option.s_, option.o_v, option.o_v_,
+                    args.lrc,
+                    REPLACEMENT)
     actor.add_grad_to_graph(critic.a_grads)
     option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
