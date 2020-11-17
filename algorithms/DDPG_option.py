@@ -385,7 +385,7 @@ if __name__ == '__main__':
             # a0 = np.random.rand(action_dim)
             a0 = offense.get_action(s, info)
 
-            s_, r, done, info = env.step(a, a0, o)
+            s_, r, done, info = env.step(a, a0, o, o_v)
             o_ = option.get_option(s_)
             o_v_ = option.get_option_value(s_)
 

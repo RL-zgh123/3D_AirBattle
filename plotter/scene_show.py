@@ -35,9 +35,10 @@ class Model(object):
         # a1 = np.random.rand(self.n_actions)
 
         op = self.option.get_option(o_n)
+        op_value = self.option.get_option_value(o_n)
         a0 = self.actor.choose_action(o_n, op[np.newaxis, :])
         a1 = self.offense.get_action(o_n, info)
-        return a0, a1, op
+        return a0, a1, op, op_value
 
     # one single rollout
     def rollout(self):
@@ -49,9 +50,8 @@ class Model(object):
         while True:
             self.step_count += 1
             steps += 1
-            act0, act1, option = self._get_action(o_n, info)
-            print(option)
-            o_n_next, r_n, d_n, info = self.env.step(act0, act1, option)
+            act0, act1, option, option_value = self._get_action(o_n, info)
+            o_n_next, r_n, d_n, info = self.env.step(act0, act1, option, option_value)
             r_all += r_n
             o_n = o_n_next
             if steps == self.max_steps or d_n:
@@ -62,7 +62,7 @@ class Model(object):
 if __name__ == '__main__':
     iterations = 100
     relative_path = '../results'
-    file_name = 4
+    file_name = 5
     file_path = '{}/{}.ckpt'.format(relative_path, file_name)
     model = Model(file_path)
     dic = {'win': 0, 'equal': 0, 'lose': 0}
