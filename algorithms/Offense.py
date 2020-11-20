@@ -22,8 +22,8 @@ class Offense(object):
         near_vector = near_friend_pos - enemy_pos # point to friend
         near_vector_norm = near_vector / np.linalg.norm(near_vector, ord=1)
         action = near_vector_norm * self.action_bound
-        # print(near_friend_pos, near_vector, action)
-        return -action
+        # print(near_friend_pos, '\n', enemy_pos, '\n', near_vector, action)
+        return 100 * action
 
 
 if __name__ == '__main__':

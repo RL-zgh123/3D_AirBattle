@@ -360,7 +360,9 @@ if __name__ == '__main__':
     M = Memory(args.memory,
                dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
     mr = deque(maxlen=200)
+    mr_shaping = deque(maxlen=200)
     all_ep_r = []
+    all_ep_r_shaping = []
 
     if OUTPUT_GRAPH:
         tf.summary.FileWriter("../logs/", sess.graph)
@@ -374,6 +376,7 @@ if __name__ == '__main__':
 
         s, info = env.reset()
         ep_reward = 0
+        ep_reward_shaping = 0
 
         for j in range(args.esteps):
             o = option.get_option(s)
@@ -421,18 +424,29 @@ if __name__ == '__main__':
 
             s = s_
             ep_reward += r
+            ep_reward_shaping += r1
 
             if j == args.esteps - 1:
                 print('Episode:', i, ' Reward: %i' % int(ep_reward),
-                      'Mean reward: %.2f' % np.round(np.mean(list(mr)), 2), )
+                      'Mean reward: %.2f' % np.round(np.mean(list(mr)), 2), 'Mean shaping reward: %.2f' % np.round(np.mean(list(mr_shaping)), 2))
 
         mr.append(ep_reward)
+        mr_shaping.append(ep_reward_shaping)
         all_ep_r.append(np.round(np.mean(list(mr)), 2))
+        all_ep_r_shaping.append(np.round(np.mean(list(mr_shaping)), 2))
 
+    plt.figure()
     plt.plot(np.arange(len(all_ep_r)), all_ep_r)
     plt.xlabel('Episode')
     plt.ylabel('Moving averaged episode reward')
     plt.savefig('result_{}.jpg'.format(args.fig))
+
+    plt.figure()
+    plt.plot(np.arange(len(all_ep_r_shaping)), all_ep_r_shaping)
+    plt.xlabel('Episode')
+    plt.ylabel('Moving averaged episode shaping reward')
+    plt.savefig('result_shaping_{}.jpg'.format(args.fig))
+
     plt.show()
 
     # save sess as ckpt
