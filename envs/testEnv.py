@@ -1,12 +1,11 @@
 
 import numpy as np
-from envs.myEnv import AirBattle
+from envs.myEnv2 import AirBattle
 
 class Model(object):
     def __init__(self):
         self.env = AirBattle()
         self.n_actions = self.env.n_actions
-        self.n_features = self.env.n_features
         self.step_count = 0
         self.max_steps = 200
 
@@ -27,7 +26,8 @@ class Model(object):
             self.step_count += 1
             steps += 1
             act0, act1 = self._get_action(o_n)
-            o_n_next, r_n, d_n, _ = self.env.step(act0, act1)
+            option, option_value = 0, [0, 0]
+            o_n_next, r_n, d_n, _ = self.env.step(act0, act1, option, option_value)
             r_all += r_n
             o_n = o_n_next
             if steps == self.max_steps or d_n:

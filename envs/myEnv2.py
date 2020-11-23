@@ -32,34 +32,32 @@ def rotate_transpose(angle):
     return A
 
 
-
-
 class entity(object):
     def __init__(self, movable=True, is_friend=True):
-        self.b_action_dim = 4 # body axis system
-        self.e_action_dim = 6 # earth axis system
+        self.action_dim = 4 # body axis system
+        self.space_dim = 6 # [x, y, z, angle[0], angle[1], angle[2]]
         self.movable = movable
         self.is_friend = is_friend
         self.radius = 1.8 if self.movable else 3
-        self.b_vel = np.zeros(self.b_action_dim, dtype=np.float32)
-        self.b_acc = np.zeros(self.b_action_dim, dtype=np.float32)
-        self.e_vel = np.zeros(self.e_action_dim, dtype=np.float32)
-        self.e_acc = np.zeros(self.e_action_dim, dtype=np.float32)
+        self.vel = np.zeros(self.action_dim, dtype=np.float32)
+        self.acc = np.zeros(self.action_dim, dtype=np.float32)
+
+        # pos = [x, y, z, angle[0], angle[1], angle[2]]
         if self.movable:
-            self.e_pos = np.array([2, 2, 2, 0, 0, 0],
+            self.pos = np.array([2, 2, 2, 0, 0, 0],
                                 dtype=np.float32) if self.is_friend else np.array(
                 [-2, -2, -2, 0, 0, 0], dtype=np.float32)
         else:
-            self.e_pos = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+            self.pos = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
 
         self.max_pos = np.array([4, 4, 4, 2 * math.pi, 2 * math.pi, 2 * math.pi],
                                 dtype=np.float32)
         self.min_pos = -self.max_pos
         self.max_vel = np.array(
-            [3.0, 3.0, 3.0, math.pi / 3, math.pi / 3, math.pi / 3], dtype=np.float32)
+            [3.0, math.pi / 3, math.pi / 3, math.pi / 3], dtype=np.float32)
         self.min_vel = -self.max_vel
         self.max_acc = 2 * np.array(
-            [2.0, 2.0, 2.0, math.pi / 4, math.pi / 4, math.pi / 4], dtype=np.float32)
+            [2.0, math.pi / 4, math.pi / 4, math.pi / 4], dtype=np.float32)
         self.min_acc = - self.max_acc
 
     def reset_state(self):
@@ -80,25 +78,22 @@ class entity(object):
 
     # limit pos range
     def pos_range_limit(self):
-        for i in range(self.action_dim):
-            if i < self.action_dim / 2:
+        for i in range(self.space_dim):
+            if i < self.space_dim / 2:
                 self.pos[i] = self.max_pos[i] if self.pos[i] > self.max_pos[i] \
                     else self.min_pos[i] if self.pos[i] < self.min_pos[i] else \
-                    self.pos[
-                        i]
+                    self.pos[i]
             else:
                 self.pos[i] = self.pos[i] - self.max_pos[i] if self.pos[i] > \
                                                                self.max_pos[i] else \
-                    self.pos[i] - self.min_pos[i] if self.pos[i] < self.min_pos[
-                        i] else \
+                    self.pos[i] - self.min_pos[i] if self.pos[i] < self.min_pos[i] else \
                         self.pos[i]
 
     # limit acc range
     def acc_range_limit(self):
         for i in range(self.action_dim):
             self.acc[i] = self.max_acc[i] if self.acc[i] > self.max_acc[i] \
-                else self.min_acc[i] if self.acc[i] < self.min_acc[i] else self.acc[
-                i]
+                else self.min_acc[i] if self.acc[i] < self.min_acc[i] else self.acc[i]
 
 
 # only support two agents(friend and enemy)
@@ -110,15 +105,16 @@ class AirBattle(object):
         self.hinder = [entity(movable=False)]
         self.agents = self.friend + self.enemy
         self.entities = self.agents + self.hinder
-        self.n_actions = 6
+        self.n_actions = 4
+        self.n_space_dim = 6
         self.n_features = self._get_state().shape[0]
         self.action_bound = self.friend[0].max_acc
         self._cursor = 0
-        self._store = np.empty([10000] + [len(self.entities) * self.n_actions + 3]) # +3 for option and option values
+        self._store = np.empty([10000] + [len(self.entities) * self.n_space_dim + 3]) # +3 for option and option values
         self._count = 0
         self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy),
                      'N_hinder': len(self.hinder), 'action_dim': self.n_actions,
-                     'entity_dim': 2 * self.n_actions + 1}
+                     'entity_dim': 2 * self.n_space_dim + 1} # adjust
 
     # detect collision
     # no requirement for entity0 and entity1
@@ -193,25 +189,53 @@ class AirBattle(object):
         z1 = x * R[2][0] + y * R[2][1] + z * R[2][2]
         return np.array([x1, y1, z1])
 
+    # def _update_state(self, act0, act1):
+    #     # pos update(regard as uniform motion)
+    #     delta_friend_pos = np.hstack(
+    #         (self.friend[0].vel[:3] * self.dt, self.friend[0].pos[-3:]))
+    #     delta_enemy_pos = np.hstack(
+    #         (self.enemy[0].vel[:3] * self.dt, self.enemy[0].pos[-3:]))
+    #
+    #     self.friend[0].pos[:3] += self._rotate(delta_friend_pos)
+    #     self.enemy[0].pos[:3] += self._rotate(delta_enemy_pos)
+    #     self.friend[0].pos[-3:] += self.friend[0].vel[-3:] * self.dt
+    #     self.enemy[0].pos[-3:] += self.enemy[0].vel[-3:] * self.dt
+    #     self.friend[0].pos_range_limit()
+    #     self.enemy[0].pos_range_limit()
+    #
+    #     # vel update
+    #     self.friend[0].acc = act0
+    #     self.friend[0].acc_range_limit()
+    #     self.friend[0].vel += self.friend[0].acc * self.dt
+    #     self.friend[0].vel_range_limit()
+    #
+    #     self.enemy[0].acc = act1
+    #     self.enemy[0].acc_range_limit()
+    #     self.enemy[0].vel += self.enemy[0].acc * self.dt
+    #     self.enemy[0].vel_range_limit()
+
+    # 目前支持两个action输入, 1 friend and 1 enemy
     def _update_state(self, act0, act1):
-        # pos update(regard as uniform motion)
-        delta_friend_pos = np.hstack(
-            (self.friend[0].vel[:3] * self.dt, self.friend[0].pos[-3:]))
-        delta_enemy_pos = np.hstack(
-            (self.enemy[0].vel[:3] * self.dt, self.enemy[0].pos[-3:]))
-
-        self.friend[0].pos[:3] += self._rotate(delta_friend_pos)
-        self.enemy[0].pos[:3] += self._rotate(delta_enemy_pos)
-        self.friend[0].pos[-3:] += self.friend[0].vel[-3:] * self.dt
-        self.enemy[0].pos[-3:] += self.enemy[0].vel[-3:] * self.dt
+        # update friend[0]
+        delta_friend_pos = np.array([[self.friend[0].vel[0]*self.dt, 0, 0]])
+        rotate_friend = rotate_transpose(self.friend[0].pos[-3:])
+        delta_friend_pos = np.dot(delta_friend_pos, rotate_friend)
+        self.friend[0].pos[:3] += delta_friend_pos[0]
+        self.friend[0].pos[-3:] += self.friend[0].vel[-3:]*self.dt
         self.friend[0].pos_range_limit()
-        self.enemy[0].pos_range_limit()
 
-        # vel update
         self.friend[0].acc = act0
         self.friend[0].acc_range_limit()
         self.friend[0].vel += self.friend[0].acc * self.dt
         self.friend[0].vel_range_limit()
+
+        # update enemy[0]
+        delta_enemy_pos = np.array([[self.enemy[0].vel[0] * self.dt, 0, 0]])
+        rotate_enemy = rotate_transpose(self.enemy[0].pos[-3:])
+        delta_enemy_pos = np.dot(delta_enemy_pos, rotate_enemy)
+        self.enemy[0].pos[:3] += delta_enemy_pos[0]
+        self.enemy[0].pos[-3:] += self.enemy[0].vel[-3:] * self.dt
+        self.enemy[0].pos_range_limit()
 
         self.enemy[0].acc = act1
         self.enemy[0].acc_range_limit()
@@ -294,12 +318,13 @@ class AirBattle(object):
         ax.set_zlabel('Z')
         ax.set_title('3D Experiment')
 
-        tf = self._store[num][: self.n_actions]
-        te = self._store[num][self.n_actions: 2 * self.n_actions]
-        tc = self._store[num][-self.n_actions-3:-3]
+        tf = self._store[num][: self.n_space_dim]
+        te = self._store[num][self.n_space_dim: 2 * self.n_space_dim]
+        tc = self._store[num][-self.n_space_dim-3:-3]
         op = self._store[num][-3:-2]
         op_value = self._store[num][-2:]
 
+        # 先转再平移
         pf = self._rotate([pf[0], pf[1], pf[2], tf[3], tf[4], tf[5]])
         pe = self._rotate([pe[0], pe[1], pe[2], te[3], te[4], te[5]])
         pc = self._rotate([pc[0], pc[1], pc[2], tc[3], tc[4], tc[5]])
@@ -331,7 +356,7 @@ class AirBattle(object):
         fig = plt.figure()
 
         # num = gap
-        num = 100
+        num = gap if gap < 100 else 100
         self._store = self._store[
                       self._cursor % self._store.shape[0] - num:self._cursor %
                                                                 self._store.shape[0]]
