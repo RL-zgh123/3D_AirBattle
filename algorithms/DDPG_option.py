@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append('..')
-from envs.myEnv import AirBattle
+from envs.myEnv2 import AirBattle
 from algorithms.Offense import Offense
 
 np.random.seed(1)

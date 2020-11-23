@@ -107,14 +107,14 @@ class AirBattle(object):
         self.entities = self.agents + self.hinder
         self.n_actions = 4
         self.n_space_dim = 6
-        self.n_features = self._get_state().shape[0]
+        self.n_features = self._get_state().shape[0] # o的所有维度
         self.action_bound = self.friend[0].max_acc
         self._cursor = 0
         self._store = np.empty([10000] + [len(self.entities) * self.n_space_dim + 3]) # +3 for option and option values
         self._count = 0
         self.info = {'N_friend': len(self.friend), 'N_enemy': len(self.enemy),
                      'N_hinder': len(self.hinder), 'action_dim': self.n_actions,
-                     'entity_dim': 2 * self.n_space_dim + 1} # adjust
+                     'entity_dim': self.n_space_dim + self.n_actions + 1} # adjust
 
     # detect collision
     # no requirement for entity0 and entity1
