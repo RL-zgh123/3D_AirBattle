@@ -1,6 +1,6 @@
 import numpy as np
 class Offense(object):
-    def __init__(self, action_bound, i_enemy = 0, factor=0.25):
+    def __init__(self, action_bound, i_enemy = 0, factor=1):
         self.i_enemy = i_enemy
         self.action_bound = action_bound * factor # reserve optimization space for intelligent agent friend
 
@@ -22,8 +22,8 @@ class Offense(object):
         near_vector = near_friend_pos - enemy_pos # point to friend
         near_vector_norm = near_vector / np.linalg.norm(near_vector, ord=1)
         action = near_vector_norm * self.action_bound
-        # print(near_friend_pos, '\n', enemy_pos, '\n', near_vector, action)
-        return 100 * action
+        # print('bound:', self.action_bound, '\n', 'vector_norm', near_vector_norm, '\n', action)
+        return action + 0.5 * np.random.randn(action_dim)
 
 
 if __name__ == '__main__':

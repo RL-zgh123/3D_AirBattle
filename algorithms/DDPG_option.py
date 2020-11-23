@@ -1,6 +1,8 @@
 import argparse
 import sys
 from collections import deque
+import pickle
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,8 +27,8 @@ LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
 GAMMA = 0.99  # reward discount
-RFACTOR = 5  # reward shaping factor
-AFACTOR = 0.25  # offense action bound shaping factor
+RFACTOR = 10  # reward shaping factor
+AFACTOR = 1  # offense action bound shaping factor
 REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
@@ -452,7 +454,13 @@ if __name__ == '__main__':
     # save sess as ckpt
     relative_path = '../results'
     file_name = args.fig
-    file_path = '{}/{}.ckpt'.format(relative_path, file_name)
+    file_path = '{}/option_{}.ckpt'.format(relative_path, file_name)
     saver = tf.train.Saver()
     saver.save(sess, file_path)
     print('Session has been saved sucessfully in {}'.format(file_path))
+
+    # save data as pkl
+    d = {"mean episode reward": all_ep_r, "mean episode shaping reward": all_ep_r_shaping}
+    with open(os.path.join(relative_path, "option_data_{}.pkl".format(file_name)), "wb") as f:
+        pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
+

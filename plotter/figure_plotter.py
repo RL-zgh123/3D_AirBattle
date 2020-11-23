@@ -15,9 +15,10 @@ class Fig_Plotter(object):
             fig = plt.figure()
             x = data[k]
             # x = self.smooth(x, sm=2)
-            length = np.array(x).shape[1]
+            print(np.array(x).shape)
+            length = np.array(x).shape[0]
             sns.set(style="darkgrid", font_scale=1.5)
-            sns.tsplot(time=range(length), data=x, color="r", condition="file_name")
+            sns.tsplot(time=range(length), data=x, color="r", condition=k)
         plt.show()
 
     def plot_multi(self):
@@ -64,4 +65,5 @@ class Fig_Plotter(object):
 
 if __name__ == '__main__':
     plotter = Fig_Plotter()
-    plotter.plot_multi()
+    # plotter.plot_multi()
+    plotter.plot_single('../results', 'option_data_0')

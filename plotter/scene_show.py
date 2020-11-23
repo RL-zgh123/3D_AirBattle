@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 sys.path.append('..')
-from envs.myEnv import AirBattle
+from envs.myEnv2 import AirBattle
 from algorithms.DDPG_option import Option, Actor
 from algorithms.Offense import Offense
 
@@ -36,6 +36,8 @@ class Model(object):
 
         op = self.option.get_option(o_n)
         op_value = self.option.get_option_value(o_n)
+        if op_value[0] - op_value[1] < 1:
+            print(op_value)
         a0 = self.actor.choose_action(o_n, op[np.newaxis, :])
         a1 = self.offense.get_action(o_n, info)
         return a0, a1, op, op_value
@@ -62,7 +64,7 @@ class Model(object):
 if __name__ == '__main__':
     iterations = 100
     relative_path = '../results'
-    file_name = 5
+    file_name = 0
     file_path = '{}/{}.ckpt'.format(relative_path, file_name)
     model = Model(file_path)
     dic = {'win': 0, 'equal': 0, 'lose': 0}
