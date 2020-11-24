@@ -21,7 +21,7 @@ class Fig_Plotter(object):
             sns.tsplot(time=range(length), data=x, color="r", condition=k)
         plt.show()
 
-    def plot_multi(self):
+    def plot_multi_demo(self):
         def getdata():
             basecond = [[18, 20, 19, 18, 13, 4, 1],
                         [20, 17, 12, 9, 3, 0, 0],
@@ -54,6 +54,35 @@ class Fig_Plotter(object):
                        condition=label[i])
         plt.show()
 
+    def plot_multi(self, relative_path, file_name, num_file, episodes):
+        all_data = {}
+        for i in range(num_file):
+            print(i)
+            file = '{}_{}.pkl'.format(file_name, i)
+            with open(os.path.join(relative_path, file), "rb") as f:
+                data = pickle.load(f)
+
+            for key in data.keys():
+                if key not in all_data.keys():
+                    all_data[key] = np.array(data[key])[np.newaxis, :episodes]
+                else:
+                    all_data[key] = np.concatenate([all_data[key], np.array(data[key])[np.newaxis, :episodes]], axis=0)
+            print(i)
+
+        fig = plt.figure()
+        xdata = np.array(range(episodes))
+        linestyle = ['-', ':']
+        color = ['r', 'g']
+        label = ['mean reward', 'mean shaping reward']
+
+        for i, key in enumerate(all_data.keys()):
+            sns.tsplot(time=xdata, data=all_data[key], color=color[i],
+                       linestyle=linestyle[i],
+                       condition=label[i])
+        plt.show()
+
+
+
     def smooth(self, data, sm=1):
         if sm > 1:
             smooth_data = []
@@ -65,5 +94,6 @@ class Fig_Plotter(object):
 
 if __name__ == '__main__':
     plotter = Fig_Plotter()
-    # plotter.plot_multi()
-    plotter.plot_single('../results', 'option_data_0')
+    # plotter.plot_multi_demo()
+    # plotter.plot_single('../results', 'option_data_0')
+    plotter.plot_multi('../results/option', 'option_data', 4, 2000)
