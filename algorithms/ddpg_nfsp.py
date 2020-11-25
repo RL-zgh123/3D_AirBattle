@@ -10,7 +10,6 @@ import tensorflow as tf
 
 sys.path.append('..')
 from envs.myEnv2 import AirBattle
-from algorithms.Offense import Offense
 from algorithms.buffer import ReplayBuffer, ReservoirBuffer
 
 np.random.seed(1)
@@ -24,7 +23,7 @@ MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
-LR_SL = 0.001 # learning rate for SL net
+LR_SL = 0.001  # learning rate for SL net
 LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
@@ -64,6 +63,14 @@ def print_args():
             args.memory,
             args.lrsl, args.lro, args.lra, args.lrc,
             args.gamma, args.r_factor, args.a_factor))
+
+
+# GAE reward
+def multi_step_reward(rewards, gamma):
+    res = 0.
+    for idx, reward in enumerate(rewards):
+        res += reward * (gamma ** idx)
+    return res
 
 
 class Option(object):
@@ -124,7 +131,8 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
+    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound,
+                 s, s_,
                  o,
                  o_, learning_rate=0.001, replacement=REPLACEMENT):
         self.name = name
@@ -221,7 +229,8 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
+    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_,
+                 s, s_,
                  o_v, o_v_, learning_rate,
                  replacement):
         self.sess = sess
@@ -314,7 +323,8 @@ class Critic(object):
 
 
 class Policy(object):
-    def __init__(self, name, sess, state_dim, action_dim, action_bound, learning_rate=0.001):
+    def __init__(self, name, sess, state_dim, action_dim, action_bound,
+                 learning_rate=0.001):
         self.sess = sess
         self.name = name
         self.lr = learning_rate
@@ -324,11 +334,13 @@ class Policy(object):
 
         with tf.variable_scope(self.name + 'policy') as scope:
             self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
-            self.sl_action = tf.placeholder(tf.float32, shape=[None, action_dim], name='a')
+            self.sl_action = tf.placeholder(tf.float32, shape=[None, action_dim],
+                                            name='a')
             self.action = self._build_net(self.s, scope='action', trainable=True)
 
             with tf.variable_scope('train'):
-                self.loss = tf.reduce_mean(tf.squared_difference(self.sl_action, self.action))
+                self.loss = tf.reduce_mean(
+                    tf.squared_difference(self.sl_action, self.action))
                 self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
     def _build_net(self, s, scope='net', trainable=True):
@@ -360,6 +372,7 @@ class Policy(object):
     def learn(self, s, a):
         self.sess.run(self.train_op, {self.s: s, self.sl_action: a})
 
+
 if __name__ == '__main__':
     env = AirBattle()
     env.reinforce_enemy(factor=args.a_factor)
@@ -374,12 +387,13 @@ if __name__ == '__main__':
     policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
     option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
     actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
-                  option1.s, option1.s_, option1.o,
-                  option1.o_, args.lra, REPLACEMENT)
+                   option1.s, option1.s_, option1.o,
+                   option1.o_, args.lra, REPLACEMENT)
     critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
-                    actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v, option1.o_v_,
-                    args.lrc,
-                    REPLACEMENT)
+                     actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v,
+                     option1.o_v_,
+                     args.lrc,
+                     REPLACEMENT)
     actor1.add_grad_to_graph(critic1.a_grads)
     option1.add_grad_to_graph(critic1.o_grads)
 
@@ -390,7 +404,8 @@ if __name__ == '__main__':
                    option2.s, option2.s_, option2.o,
                    option2.o_, args.lra, REPLACEMENT)
     critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
-                     actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v, option2.o_v_,
+                     actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v,
+                     option2.o_v_,
                      args.lrc,
                      REPLACEMENT)
     actor1.add_grad_to_graph(critic1.a_grads)
@@ -399,9 +414,10 @@ if __name__ == '__main__':
 
     # replay buffer and reservior buffer
     Replay1 = ReplayBuffer(args.memory,
-               dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
+                           dims=2 * (
+                                       state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
     Replay2 = ReplayBuffer(args.memory,
-                dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)
+                           dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)
 
     Reservoir1 = ReservoirBuffer(args.memory)
     Reservoir2 = ReservoirBuffer(args.memory)
@@ -416,8 +432,8 @@ if __name__ == '__main__':
         if i % 50 == 0:
             print_args()
 
-        if RENDER:
-            env.render()
+        # if RENDER:
+        #     env.render()
 
         s, info = env.reset()
         ep_reward = 0
