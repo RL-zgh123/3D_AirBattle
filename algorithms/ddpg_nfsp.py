@@ -11,6 +11,7 @@ import tensorflow as tf
 sys.path.append('..')
 from envs.myEnv2 import AirBattle
 from algorithms.Offense import Offense
+from algorithms.buffer import ReplayBuffer, ReservoirBuffer
 
 np.random.seed(1)
 tf.set_random_seed(1)
@@ -23,6 +24,7 @@ MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
+LR_SL = 0.001 # learning rate for SL net
 LR_O = 0.001  # learning rate for option
 LR_A = 0.001  # learning rate for actor
 LR_C = 0.001  # learning rate for critic
@@ -34,7 +36,6 @@ REPLACEMENT = [
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
 ][1]
 RENDER = False
-OUTPUT_GRAPH = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--episode', type=int, default=MAX_EPISODES)
@@ -45,6 +46,7 @@ parser.add_argument('--gap', type=int, default=RANDOM_DECAY_GAP)
 parser.add_argument('--batch', type=int, default=BATCH_SIZE)
 parser.add_argument('--esteps', type=int, default=MAX_EP_STEPS)
 parser.add_argument('--memory', type=int, default=MEMORY_CAPACITY)
+parser.add_argument('--lrsl', type=float, default=LR_SL)
 parser.add_argument('--lro', type=float, default=LR_O)
 parser.add_argument('--lra', type=float, default=LR_A)
 parser.add_argument('--lrc', type=float, default=LR_C)
@@ -56,43 +58,32 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        '\nfig_num: {}\nmax_episodes:{}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
+        '\nfig_num: {}\nmax_episodes:{}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_SL: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
             args.fig, args.episode, args.explore, args.decay, args.gap, args.batch,
             args.esteps,
             args.memory,
-            args.lro, args.lra, args.lrc, args.gamma, args.r_factor, args.a_factor))
+            args.lrsl, args.lro, args.lra, args.lrc,
+            args.gamma, args.r_factor, args.a_factor))
 
 
 class Option(object):
-    def __init__(self, sess, option_dim, state_dim, learning_rate=0.001):
+    def __init__(self, name, sess, option_dim, state_dim, learning_rate=0.001):
         self.sess = sess
+        self.name = name
         self.op_dim = option_dim
         self.lr = learning_rate
 
-        self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
-        self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
-
-        # # double target structure
-        # with tf.variable_scope('option'):
-        #     self.o = self._build_net(self.s, 'eval_net', trainable=True)
-        #     self.o_ = self._build_net(self.s_, 'target_net', trainable=False)
-        #
-        # self.e_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-        #                                   scope='option/eval_net')
-        # self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-        #                                   scope='option/target_net')
-
         # single structure
-        with tf.variable_scope('option') as scope:
+        with tf.variable_scope(self.name + 'option') as scope:
+            self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
+            self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
             self.o_v = self._build_net(self.s)
-            # self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
             self.o = tf.random.categorical(self.o_v, 1)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
-            # self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
             self.o_ = tf.random.categorical(self.o_v_, 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                        scope='option/net')
+                                        scope=self.name + 'option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
         with tf.variable_scope(scope):
@@ -133,9 +124,10 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
+    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
                  o,
                  o_, learning_rate=0.001, replacement=REPLACEMENT):
+        self.name = name
         self.sess = sess
         self.a_dim = action_dim
         self.s_dim = state_dim
@@ -145,10 +137,9 @@ class Actor(object):
         self.t_replace_counter = 0
         self.op_dim = option_dim
 
-        self.s = s
-        self.s_ = s_
-
-        with tf.variable_scope('Actor'):
+        with tf.variable_scope(self.name + 'Actor'):
+            self.s = s
+            self.s_ = s_
             self.o = o
             self.o_ = o_
             self.a = self._build_net(self.s, self.o, scope='eval_net',
@@ -157,9 +148,9 @@ class Actor(object):
                                       trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope='Actor/eval_net')
+                                          scope=self.name + 'Actor/eval_net')
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope='Actor/target_net')
+                                          scope=self.name + 'Actor/target_net')
 
         if self.replacement['name'] == 'hard':
             self.t_replace_counter = 0
@@ -230,10 +221,11 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
+    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
                  o_v, o_v_, learning_rate,
                  replacement):
         self.sess = sess
+        self.name = name
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.op_dim = option_dim
@@ -241,23 +233,23 @@ class Critic(object):
         self.gamma = gamma
         self.replacement = replacement
 
-        self.s = s
-        self.r = tf.placeholder(tf.float32, [None, 1], name='r')
-        self.s_ = s_
-        self.o_v = o_v
-        self.o_v_ = o_v_
-
-        with tf.variable_scope('Critic'):
+        with tf.variable_scope(self.name + 'Critic'):
+            self.s = s
+            self.r = tf.placeholder(tf.float32, [None, 1], name='r')
+            self.s_ = s_
+            self.o_v = o_v
+            self.o_v_ = o_v_
             self.a = a
+
             self.q = self._build_net(self.s, self.a, self.o_v, 'eval_net',
                                      trainable=True)
             self.q_ = self._build_net(self.s_, a_, self.o_v_, 'target_net',
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope='Critic/eval_net')
+                                              scope=self.name + 'Critic/eval_net')
             self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope='Critic/target_net')
+                                              scope=self.name + 'Critic/target_net')
 
         with tf.variable_scope('target_q'):
             self.target_q = self.r + self.gamma * self.q_
@@ -321,23 +313,52 @@ class Critic(object):
             self.t_replace_counter += 1
 
 
-class Memory(object):
-    def __init__(self, capacity, dims):
-        self.capacity = capacity
-        self.data = np.zeros((capacity, dims))
-        self.pointer = 0
+class Policy(object):
+    def __init__(self, name, sess, state_dim, action_dim, action_bound, learning_rate=0.001):
+        self.sess = sess
+        self.name = name
+        self.lr = learning_rate
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.action_bound = action_bound
 
-    def store_transition(self, s, o, o_v, a, r, s_, o_, o_v_):
-        transition = np.hstack((s, o, o_v, a, [r], s_, o_, o_v_))
-        index = self.pointer % self.capacity
-        self.data[index, :] = transition
-        self.pointer += 1
+        with tf.variable_scope(self.name + 'policy') as scope:
+            self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
+            self.sl_action = tf.placeholder(tf.float32, shape=[None, action_dim], name='a')
+            self.action = self._build_net(self.s, scope='action', trainable=True)
 
-    def sample(self, n):
-        assert self.pointer >= self.capacity, 'Memory has not been fulfilled'
-        indices = np.random.choice(self.capacity, size=n)
-        return self.data[indices, :]
+            with tf.variable_scope('train'):
+                self.loss = tf.reduce_mean(tf.squared_difference(self.sl_action, self.action))
+                self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
+    def _build_net(self, s, scope='net', trainable=True):
+        with tf.variable_scope(scope):
+            init_w = tf.random_normal_initializer(0., 0.3)
+            init_b = tf.constant_initializer(0.1)
+            nl1 = 50
+            nl2 = 30
+
+            h1 = tf.layers.dense(s, nl1, activation=tf.nn.relu,
+                                 kernel_initializer=init_w,
+                                 bias_initializer=init_b,
+                                 name='h1')
+            h2 = tf.layers.dense(h1, nl2, activation=tf.nn.relu,
+                                 kernel_initializer=init_w,
+                                 bias_initializer=init_b,
+                                 name='h2')
+            action = tf.layers.dense(h2, self.action_dim, activation=tf.nn.tanh,
+                                     kernel_initializer=init_w,
+                                     bias_initializer=init_b,
+                                     name='output')
+            scaled_a = tf.multiply(action, self.action_bound, name='scaled_a')
+        return scaled_a
+
+    def choose_action(self, s):
+        s = s.[np.newaxis, :]
+        return self.sess.run(self.action, {self.s: s})[0]
+
+    def learn(self, s, a):
+        self.sess.run(self.train_op, {self.s: s, self.sl_action: a})
 
 if __name__ == '__main__':
     env = AirBattle()
@@ -346,30 +367,50 @@ if __name__ == '__main__':
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
-    offense = Offense(action_bound, 0, args.a_factor)
+    # offense = Offense(action_bound, 0, args.a_factor)
 
     sess = tf.Session()
-    option = Option(sess, option_dim, state_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, state_dim, action_bound,
-                  option.s, option.s_, option.o,
-                  option.o_, args.lra, REPLACEMENT)
-    critic = Critic(sess, option_dim, state_dim, action_dim, args.gamma,
-                    actor.a, actor.a_, option.s, option.s_, option.o_v, option.o_v_,
+    # agent1 network
+    policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
+    option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
+    actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
+                  option1.s, option1.s_, option1.o,
+                  option1.o_, args.lra, REPLACEMENT)
+    critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
+                    actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v, option1.o_v_,
                     args.lrc,
                     REPLACEMENT)
-    actor.add_grad_to_graph(critic.a_grads)
-    option.add_grad_to_graph(critic.o_grads)
+    actor1.add_grad_to_graph(critic1.a_grads)
+    option1.add_grad_to_graph(critic1.o_grads)
+
+    # agent2 network
+    policy2 = Policy('agent2', sess, state_dim, action_dim, action_bound, args.lrsl)
+    option2 = Option('agent2', sess, option_dim, state_dim, args.lro)
+    actor2 = Actor('agent2', sess, option_dim, action_dim, state_dim, action_bound,
+                   option2.s, option2.s_, option2.o,
+                   option2.o_, args.lra, REPLACEMENT)
+    critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
+                     actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v, option2.o_v_,
+                     args.lrc,
+                     REPLACEMENT)
+    actor1.add_grad_to_graph(critic1.a_grads)
+    option1.add_grad_to_graph(critic1.o_grads)
     sess.run(tf.global_variables_initializer())
 
-    M = Memory(args.memory,
+    # replay buffer and reservior buffer
+    Replay1 = ReplayBuffer(args.memory,
                dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
+    Replay2 = ReplayBuffer(args.memory,
+                dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)
+
+    Reservoir1 = ReservoirBuffer(args.memory)
+    Reservoir2 = ReservoirBuffer(args.memory)
+
+    # logger
     mr = deque(maxlen=200)
     mr_shaping = deque(maxlen=200)
     all_ep_r = []
     all_ep_r_shaping = []
-
-    if OUTPUT_GRAPH:
-        tf.summary.FileWriter("../logs/", sess.graph)
 
     for i in range(MAX_EPISODES):
         if i % 50 == 0:

@@ -76,12 +76,51 @@ class Fig_Plotter(object):
         label = ['mean reward', 'mean shaping reward']
 
         for i, key in enumerate(all_data.keys()):
-            sns.tsplot(time=xdata, data=all_data[key], color=color[i],
+            ax = sns.tsplot(time=xdata, data=all_data[key], color=color[i],
                        linestyle=linestyle[i],
                        condition=label[i])
+            ax.legend(fontsize=15)
+            ax.set_xlabel('Episodes')
+            ax.set_ylabel('Reward')
+
+        plt.axis([0, episodes, -10, 35])
         plt.show()
 
+    def plot_compare(self, relative_path, file_name_list, key_word, num_file, episodes):
+        all_data = {}
+        for file_name in file_name_list:
+            print(file_name)
+            for i in range(num_file):
+                print(i)
+                file = '{}_{}.pkl'.format(file_name, i)
+                with open(os.path.join(relative_path, file), "rb") as f:
+                    data = pickle.load(f)
 
+                key = key_word + file_name
+                add_data = np.array(data[key_word])
+                if key not in all_data.keys():
+                    all_data[key] = add_data[np.newaxis, :episodes]
+                else:
+                    all_data[key] = np.concatenate([all_data[key], add_data[np.newaxis, :episodes]], axis=0)
+
+        fig = plt.figure()
+        xdata = np.array(range(episodes))
+        linestyle = ['-', '-']
+        color = ['r', 'g']
+        label = file_name_list
+
+        for i, key in enumerate(all_data.keys()):
+            ax = sns.tsplot(time=xdata, data=all_data[key], color=color[i],
+                       linestyle=linestyle[i],
+                       condition=label[i])
+            ax.legend(fontsize=15)
+            ax.set_xlabel('Episodes')
+            ax.set_ylabel('Reward')
+
+        plt.axhline(y=15.0, color='b', linestyle='--')
+        plt.axhline(y=10.0, color='b', linestyle='--')
+        plt.axis([0, episodes, -5, 25])
+        plt.show()
 
     def smooth(self, data, sm=1):
         if sm > 1:
@@ -96,4 +135,5 @@ if __name__ == '__main__':
     plotter = Fig_Plotter()
     # plotter.plot_multi_demo()
     # plotter.plot_single('../results', 'option_data_0')
-    plotter.plot_multi('../results/option', 'option_data', 4, 2000)
+    # plotter.plot_multi('../results/option', 'option_data', 4, 2000)
+    plotter.plot_compare('../results/option', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
