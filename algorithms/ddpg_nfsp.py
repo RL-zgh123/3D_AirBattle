@@ -420,34 +420,32 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     # agent1 network
-    with tf.Graph().as_default():
-        policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
-        option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
-        actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
-                       option1.s, option1.s_, option1.o,
-                       option1.o_, args.lra, REPLACEMENT)
-        critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
-                         actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v,
-                         option1.o_v_,
-                         args.lrc,
-                         REPLACEMENT)
-        actor1.add_grad_to_graph(critic1.a_grads)
-        option1.add_grad_to_graph(critic1.o_grads)
+    policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
+    option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
+    actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
+                   option1.s, option1.s_, option1.o,
+                   option1.o_, args.lra, REPLACEMENT)
+    critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
+                     actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v,
+                     option1.o_v_,
+                     args.lrc,
+                     REPLACEMENT)
+    actor1.add_grad_to_graph(critic1.a_grads)
+    option1.add_grad_to_graph(critic1.o_grads)
 
     # agent2 network
-    with tf.Graph().as_default():
-        policy2 = Policy('agent2', sess, state_dim, action_dim, action_bound, args.lrsl)
-        option2 = Option('agent2', sess, option_dim, state_dim, args.lro)
-        actor2 = Actor('agent2', sess, option_dim, action_dim, state_dim, action_bound,
-                       option2.s, option2.s_, option2.o,
-                       option2.o_, args.lra, REPLACEMENT)
-        critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
-                         actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v,
-                         option2.o_v_,
-                         args.lrc,
-                         REPLACEMENT)
-        actor2.add_grad_to_graph(critic2.a_grads)
-        option2.add_grad_to_graph(critic2.o_grads)
+    policy2 = Policy('agent2', sess, state_dim, action_dim, action_bound, args.lrsl)
+    option2 = Option('agent2', sess, option_dim, state_dim, args.lro)
+    actor2 = Actor('agent2', sess, option_dim, action_dim, state_dim, action_bound,
+                   option2.s, option2.s_, option2.o,
+                   option2.o_, args.lra, REPLACEMENT)
+    critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
+                     actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v,
+                     option2.o_v_,
+                     args.lrc,
+                     REPLACEMENT)
+    actor2.add_grad_to_graph(critic2.a_grads)
+    option2.add_grad_to_graph(critic2.o_grads)
     sess.run(tf.global_variables_initializer())
 
     # replay buffer and reservior buffer
