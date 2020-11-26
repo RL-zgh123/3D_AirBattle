@@ -1,6 +1,7 @@
 import argparse
 import os
 import pickle
+import random
 import sys
 from collections import deque
 
@@ -17,10 +18,12 @@ tf.set_random_seed(1)
 
 FIG_NUM = 0
 EXPLORE = 10
+ETA = 0.1  # nfsp choose best policy threshold
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
+MULTI_STEPS = 1  # GAE steps
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_SL = 0.001  # learning rate for SL net
@@ -37,6 +40,8 @@ REPLACEMENT = [
 RENDER = False
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--eta', type=float, default=ETA)
+parser.add_argument('--multi_steps', type=int, default=MULTI_STEPS)
 parser.add_argument('--episode', type=int, default=MAX_EPISODES)
 parser.add_argument('--fig', type=int, default=FIG_NUM)
 parser.add_argument('--explore', type=float, default=EXPLORE)
@@ -57,8 +62,9 @@ args = parser.parse_args()
 
 def print_args():
     print(
-        '\nfig_num: {}\nmax_episodes:{}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_SL: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
-            args.fig, args.episode, args.explore, args.decay, args.gap, args.batch,
+        '\nfig_num: {}\neta: {}\nmulti_steps: {}\nmax_episodes:{}\nexplore: {}\ndecay: {}\ngap: {}\nbatch: {}\nep_steps: {}\nmemory size: {}\nLR_SL: {}\nLR_O: {}\nLR_A: {}\nLR_C: {}\ngamma: {}\nr_factor: {}\na_factor: {}\n'.format(
+            args.fig, args.eta, args.multi_steps, args.episode, args.explore,
+            args.decay, args.gap, args.batch,
             args.esteps,
             args.memory,
             args.lrsl, args.lro, args.lra, args.lrc,
@@ -73,6 +79,33 @@ def multi_step_reward(rewards, gamma):
     return res
 
 
+# exchange state order from friend to enemy
+def exchange_order(state, num_friend, num_enemy, agent_features):
+    new_state = np.zeros(state.shape)
+    new_state[:num_enemy * agent_features] = state[num_friend * agent_features:(
+                                                                                           num_friend + num_enemy) * agent_features]
+    new_state[
+    num_enemy * agent_features:(num_enemy + num_friend) * agent_features] = state[
+                                                                            :num_friend * agent_features]
+    new_state[(num_friend + num_enemy) * agent_features:] = state[(
+                                                                              num_friend + num_enemy) * agent_features:]
+    return new_state
+
+
+def split_batch(b_M, state_dim, option_dim, action_dim):
+    b_s = b_M[:, :state_dim]
+    b_o = b_M[:, state_dim: state_dim + 1]
+    b_ov = b_M[:, state_dim + 1: state_dim + 1 + option_dim]
+    b_a = b_M[:,
+          state_dim + 1 + option_dim: state_dim + 1 + option_dim + action_dim]
+    b_r = b_M[:,
+          -option_dim - state_dim - 2: -option_dim - state_dim - 1]
+    b_s_ = b_M[:, -option_dim - state_dim - 1:-option_dim - 1]
+    b_o_ = b_M[:, -option_dim - 1:-option_dim]
+    b_ov_ = b_M[:, -option_dim:]
+    return b_s, b_o, b_ov, b_a, b_r, b_s_, b_o_, b_ov_
+
+
 class Option(object):
     def __init__(self, name, sess, option_dim, state_dim, learning_rate=0.001):
         self.sess = sess
@@ -81,7 +114,7 @@ class Option(object):
         self.lr = learning_rate
 
         # single structure
-        with tf.variable_scope(self.name + 'option') as scope:
+        with tf.variable_scope(self.name + '/option') as scope:
             self.s = tf.placeholder(tf.float32, shape=[None, state_dim], name='s')
             self.s_ = tf.placeholder(tf.float32, shape=[None, state_dim], name='s_')
             self.o_v = self._build_net(self.s)
@@ -90,7 +123,7 @@ class Option(object):
             self.o_v_ = self._build_net(self.s_)
             self.o_ = tf.random.categorical(self.o_v_, 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                        scope=self.name + 'option/net')
+                                        scope=self.name + '/option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
         with tf.variable_scope(scope):
@@ -145,7 +178,7 @@ class Actor(object):
         self.t_replace_counter = 0
         self.op_dim = option_dim
 
-        with tf.variable_scope(self.name + 'Actor'):
+        with tf.variable_scope(self.name + '/Actor'):
             self.s = s
             self.s_ = s_
             self.o = o
@@ -156,9 +189,9 @@ class Actor(object):
                                       trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope=self.name + 'Actor/eval_net')
+                                          scope=self.name + '/Actor/eval_net')
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope=self.name + 'Actor/target_net')
+                                          scope=self.name + '/Actor/target_net')
 
         if self.replacement['name'] == 'hard':
             self.t_replace_counter = 0
@@ -242,7 +275,7 @@ class Critic(object):
         self.gamma = gamma
         self.replacement = replacement
 
-        with tf.variable_scope(self.name + 'Critic'):
+        with tf.variable_scope(self.name + '/Critic'):
             self.s = s
             self.r = tf.placeholder(tf.float32, [None, 1], name='r')
             self.s_ = s_
@@ -256,9 +289,9 @@ class Critic(object):
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope=self.name + 'Critic/eval_net')
+                                              scope=self.name + '/Critic/eval_net')
             self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope=self.name + 'Critic/target_net')
+                                              scope=self.name + '/Critic/target_net')
 
         with tf.variable_scope('target_q'):
             self.target_q = self.r + self.gamma * self.q_
@@ -366,7 +399,7 @@ class Policy(object):
         return scaled_a
 
     def choose_action(self, s):
-        s = s.[np.newaxis, :]
+        s = s[np.newaxis, :]
         return self.sess.run(self.action, {self.s: s})[0]
 
     def learn(self, s, a):
@@ -377,6 +410,9 @@ if __name__ == '__main__':
     env = AirBattle()
     env.reinforce_enemy(factor=args.a_factor)
     option_dim = 2
+    friend_num = len(env.friend)
+    enemy_num = len(env.enemy)
+    agent_features = env.n_space_dim
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
@@ -384,38 +420,40 @@ if __name__ == '__main__':
 
     sess = tf.Session()
     # agent1 network
-    policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
-    option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
-    actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
-                   option1.s, option1.s_, option1.o,
-                   option1.o_, args.lra, REPLACEMENT)
-    critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
-                     actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v,
-                     option1.o_v_,
-                     args.lrc,
-                     REPLACEMENT)
-    actor1.add_grad_to_graph(critic1.a_grads)
-    option1.add_grad_to_graph(critic1.o_grads)
+    with tf.Graph().as_default():
+        policy1 = Policy('agent1', sess, state_dim, action_dim, action_bound, args.lrsl)
+        option1 = Option('agent1', sess, option_dim, state_dim, args.lro)
+        actor1 = Actor('agent1', sess, option_dim, action_dim, state_dim, action_bound,
+                       option1.s, option1.s_, option1.o,
+                       option1.o_, args.lra, REPLACEMENT)
+        critic1 = Critic('agent1', sess, option_dim, state_dim, action_dim, args.gamma,
+                         actor1.a, actor1.a_, option1.s, option1.s_, option1.o_v,
+                         option1.o_v_,
+                         args.lrc,
+                         REPLACEMENT)
+        actor1.add_grad_to_graph(critic1.a_grads)
+        option1.add_grad_to_graph(critic1.o_grads)
 
     # agent2 network
-    policy2 = Policy('agent2', sess, state_dim, action_dim, action_bound, args.lrsl)
-    option2 = Option('agent2', sess, option_dim, state_dim, args.lro)
-    actor2 = Actor('agent2', sess, option_dim, action_dim, state_dim, action_bound,
-                   option2.s, option2.s_, option2.o,
-                   option2.o_, args.lra, REPLACEMENT)
-    critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
-                     actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v,
-                     option2.o_v_,
-                     args.lrc,
-                     REPLACEMENT)
-    actor1.add_grad_to_graph(critic1.a_grads)
-    option1.add_grad_to_graph(critic1.o_grads)
+    with tf.Graph().as_default():
+        policy2 = Policy('agent2', sess, state_dim, action_dim, action_bound, args.lrsl)
+        option2 = Option('agent2', sess, option_dim, state_dim, args.lro)
+        actor2 = Actor('agent2', sess, option_dim, action_dim, state_dim, action_bound,
+                       option2.s, option2.s_, option2.o,
+                       option2.o_, args.lra, REPLACEMENT)
+        critic2 = Critic('agent2', sess, option_dim, state_dim, action_dim, args.gamma,
+                         actor2.a, actor2.a_, option2.s, option2.s_, option2.o_v,
+                         option2.o_v_,
+                         args.lrc,
+                         REPLACEMENT)
+        actor2.add_grad_to_graph(critic2.a_grads)
+        option2.add_grad_to_graph(critic2.o_grads)
     sess.run(tf.global_variables_initializer())
 
     # replay buffer and reservior buffer
     Replay1 = ReplayBuffer(args.memory,
                            dims=2 * (
-                                       state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
+                                   state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
     Replay2 = ReplayBuffer(args.memory,
                            dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)
 
@@ -435,56 +473,94 @@ if __name__ == '__main__':
         # if RENDER:
         #     env.render()
 
-        s, info = env.reset()
+        s_f, info = env.reset()
+        s_e = exchange_order(s_f, friend_num, enemy_num, agent_features)
+
         ep_reward = 0
         ep_reward_shaping = 0
 
         for j in range(args.esteps):
-            o = option.get_option(s)
-            o_v = option.get_option_value(s)
-            a = actor.choose_action(s, o[np.newaxis, :])
-            # print(s.shape, a.shape)
-            a = np.clip(np.random.normal(a, args.explore), -2,
-                        2)  # add randomness for exploration
+            is_best_response = False
 
-            # a0 = np.random.rand(action_dim)
-            a0 = offense.get_action(s, info)
+            o1 = option1.get_option(s_f)
+            o_v1 = option1.get_option_value(s_f)
+            o2 = option2.get_option(s_e)
+            o_v2 = option2.get_option_value(s_e)
 
-            s_, r, done, info = env.step(a, a0, o, o_v)
-            o_ = option.get_option(s_)
-            o_v_ = option.get_option_value(s_)
+            # Action selection is decided by a combination of best response and average strategy
+            if random.random() > args.eta:
+                p1_action = policy1.choose_action(s_f)
+                p2_action = policy2.choose_action(s_e)
+
+            else:
+                is_best_response = True
+
+                p1_action = actor1.choose_action(s_f, o1[np.newaxis, :])
+                p1_action = np.clip(np.random.normal(p1_action, args.explore), -2,
+                                    2)  # add randomness for exploration
+
+                p2_action = actor2.choose_action(s_e, o2[np.newaxis, :])
+                p2_action = np.clip(np.random.normal(p2_action, args.explore), -2,
+                                    2)  # add randomness for exploration
+
+            # interaction with env
+            s_f_, r, done, info = env.step(p1_action, p2_action, o1,
+                                           o_v1)  # (o, o_v) not interact with env
+            s_e_ = exchange_order(s_f_, friend_num, enemy_num, agent_features)
+
+            o1_ = option1.get_option(s_f_)
+            o_v1_ = option1.get_option_value(s_f_)
+            o2_ = option2.get_option(s_e_)
+            o_v2_ = option2.get_option_value(s_e_)
 
             # reward shaping based on o
             # o=0 encouraging offense, while o=1 encouraging defense
             r1 = r
-            if (o[0] == 0 and r < 0) or (o[0] == 1 and r > 0):
+            if (o1[0] == 0 and r1 < 0) or (o1[0] == 1 and r1 > 0):
                 r1 /= args.r_factor
 
-            M.store_transition(s, o, o_v, a, r1, s_, o_, o_v_)
+            r2 = -r
+            if (o2[0] == 0 and r2 < 0) or (o2[0] == 1 and r2 > 0):
+                r2 /= args.r_factor
 
-            if M.pointer == args.memory:
+            # store buffer
+            Replay1.store_transition(s_f, o1, o_v1, p1_action, r1, s_f_, o1_, o_v1_)
+            Replay2.store_transition(s_e, o2, o_v2, p2_action, r2, s_e_, o2_, o_v2_)
+
+            if is_best_response:
+                Reservoir1.store_transition(s_f, p1_action)
+                Reservoir2.store_transition(s_e, p2_action)
+
+            # training
+            if Replay1.pointer == args.memory:
                 print('\nBegin training\n')
 
-            if M.pointer > args.memory:
-                if M.pointer % args.gap == 0:
+            if Replay1.pointer > args.memory:
+                if Replay1.pointer % args.gap == 0:
                     args.explore *= args.decay  # decay the action randomness
-                b_M = M.sample(BATCH_SIZE)
-                b_s = b_M[:, :state_dim]
-                b_o = b_M[:, state_dim: state_dim + 1]
-                b_ov = b_M[:, state_dim + 1: state_dim + 1 + option_dim]
-                b_a = b_M[:,
-                      state_dim + 1 + option_dim: state_dim + 1 + option_dim + action_dim]
-                b_r = b_M[:,
-                      -option_dim - state_dim - 2: -option_dim - state_dim - 1]
-                b_s_ = b_M[:, -option_dim - state_dim - 1:-option_dim - 1]
-                b_o_ = b_M[:, -option_dim - 1:-option_dim]
-                b_ov_ = b_M[:, -option_dim:]
 
-                option.learn(b_s)
-                critic.learn(b_s, b_ov, b_a, b_r, b_s_, b_ov_)
-                actor.learn(b_s, b_o)
+                b_M1 = Replay1.sample(BATCH_SIZE)
+                b_s1, b_o1, b_ov1, b_a1, b_r1, b_s1_, b_o1_, b_ov1_ = split_batch(
+                    b_M1, state_dim, option_dim, action_dim)
+                option1.learn(b_s1)
+                critic1.learn(b_s1, b_ov1, b_a1, b_r1, b_s1_, b_ov1_)
+                actor1.learn(b_s1, b_o1)
 
-            s = s_
+                b_M2 = Replay2.sample(BATCH_SIZE)
+                b_s2, b_o2, b_ov2, b_a2, b_r2, b_s2_, b_o2_, b_ov2_ = split_batch(
+                    b_M2, state_dim, option_dim, action_dim)
+                option2.learn(b_s2)
+                critic2.learn(b_s2, b_ov2, b_a2, b_r2, b_s2_, b_ov2_)
+                actor2.learn(b_s2, b_o2)
+
+                b_s1, b_a1 = Reservoir1.sample(BATCH_SIZE)
+                policy1.learn(b_s1, b_a1)
+
+                b_s2, b_a2 = Reservoir2.sample(BATCH_SIZE)
+                policy2.learn(b_s2, b_a2)
+
+            s_f = s_f_
+            s_e = s_e_
             ep_reward += r
             ep_reward_shaping += r1
 
@@ -516,7 +592,7 @@ if __name__ == '__main__':
     # save sess as ckpt
     relative_path = '../results'
     file_name = args.fig
-    file_path = '{}/option_{}.ckpt'.format(relative_path, file_name)
+    file_path = '{}/nfsp_{}.ckpt'.format(relative_path, file_name)
     saver = tf.train.Saver()
     saver.save(sess, file_path)
     print('Session has been saved sucessfully in {}'.format(file_path))
@@ -524,6 +600,6 @@ if __name__ == '__main__':
     # save data as pkl
     d = {"mean episode reward": all_ep_r,
          "mean episode shaping reward": all_ep_r_shaping}
-    with open(os.path.join(relative_path, "option_data_{}.pkl".format(file_name)),
+    with open(os.path.join(relative_path, "nfsp_data_{}.pkl".format(file_name)),
               "wb") as f:
         pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
