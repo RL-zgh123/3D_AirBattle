@@ -24,6 +24,7 @@ RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MULTI_STEPS = 1  # GAE steps
+TEST_GAP = 200 # win rate test interval
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_SL = 0.001  # learning rate for SL net
@@ -37,7 +38,6 @@ REPLACEMENT = [
     dict(name='soft', tau=0.01),
     dict(name='hard', rep_iter_a=600, rep_iter_c=500)
 ][1]
-RENDER = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--eta', type=float, default=ETA)
@@ -416,7 +416,6 @@ if __name__ == '__main__':
     state_dim = env.n_features
     action_dim = env.n_actions
     action_bound = env.action_bound  # action的激活函数是tanh
-    # offense = Offense(action_bound, 0, args.a_factor)
 
     sess = tf.Session()
     # agent1 network
@@ -467,9 +466,6 @@ if __name__ == '__main__':
     for i in range(MAX_EPISODES):
         if i % 50 == 0:
             print_args()
-
-        # if RENDER:
-        #     env.render()
 
         s_f, info = env.reset()
         s_e = exchange_order(s_f, friend_num, enemy_num, agent_features)
@@ -568,11 +564,21 @@ if __name__ == '__main__':
                       'Mean shaping reward: %.2f' % np.round(
                           np.mean(list(mr_shaping)), 2))
 
+        # test win rate
+        if i % TEST_GAP == 0:
+
+
+
+
+
+
+
         mr.append(ep_reward)
         mr_shaping.append(ep_reward_shaping)
         all_ep_r.append(np.round(np.mean(list(mr)), 2))
         all_ep_r_shaping.append(np.round(np.mean(list(mr_shaping)), 2))
 
+    # plot reward curve
     plt.figure()
     plt.plot(np.arange(len(all_ep_r)), all_ep_r)
     plt.xlabel('Episode')

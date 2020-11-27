@@ -64,8 +64,9 @@ def print_args():
 
 
 class Option(object):
-    def __init__(self, sess, option_dim, state_dim, learning_rate=0.001):
+    def __init__(self, name, sess, option_dim, state_dim, learning_rate=0.001):
         self.sess = sess
+        self.name = name
         self.op_dim = option_dim
         self.lr = learning_rate
 
@@ -83,7 +84,7 @@ class Option(object):
         #                                   scope='option/target_net')
 
         # single structure
-        with tf.variable_scope('option') as scope:
+        with tf.variable_scope(self.name + '/option') as scope:
             self.o_v = self._build_net(self.s)
             # self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
             self.o = tf.random.categorical(self.o_v, 1)
@@ -92,7 +93,7 @@ class Option(object):
             # self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
             self.o_ = tf.random.categorical(self.o_v_, 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                        scope='option/net')
+                                        scope=self.name + '/option/net')
 
     def _build_net(self, s, scope='net', trainable=True):
         with tf.variable_scope(scope):
@@ -133,9 +134,10 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
+    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
                  o,
                  o_, learning_rate=0.001, replacement=REPLACEMENT):
+        self.name = name
         self.sess = sess
         self.a_dim = action_dim
         self.s_dim = state_dim
@@ -148,7 +150,7 @@ class Actor(object):
         self.s = s
         self.s_ = s_
 
-        with tf.variable_scope('Actor'):
+        with tf.variable_scope(self.name + '/Actor'):
             self.o = o
             self.o_ = o_
             self.a = self._build_net(self.s, self.o, scope='eval_net',
@@ -157,9 +159,9 @@ class Actor(object):
                                       trainable=False)
 
         self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope='Actor/eval_net')
+                                          scope=self.name + '/Actor/eval_net')
         self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                          scope='Actor/target_net')
+                                          scope=self.name + '/Actor/target_net')
 
         if self.replacement['name'] == 'hard':
             self.t_replace_counter = 0
@@ -230,9 +232,10 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
+    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
                  o_v, o_v_, learning_rate,
                  replacement):
+        self.name = name
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -247,7 +250,7 @@ class Critic(object):
         self.o_v = o_v
         self.o_v_ = o_v_
 
-        with tf.variable_scope('Critic'):
+        with tf.variable_scope(self.name + '/Critic'):
             self.a = a
             self.q = self._build_net(self.s, self.a, self.o_v, 'eval_net',
                                      trainable=True)
@@ -255,9 +258,9 @@ class Critic(object):
                                       trainable=False)  # target_q is based on a_ from Actor's target_net
 
             self.e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope='Critic/eval_net')
+                                              scope=self.name + '/Critic/eval_net')
             self.t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                              scope='Critic/target_net')
+                                              scope=self.name + '/Critic/target_net')
 
         with tf.variable_scope('target_q'):
             self.target_q = self.r + self.gamma * self.q_
@@ -349,11 +352,11 @@ if __name__ == '__main__':
     offense = Offense(action_bound, 0, args.a_factor)
 
     sess = tf.Session()
-    option = Option(sess, option_dim, state_dim, args.lro)
-    actor = Actor(sess, option_dim, action_dim, state_dim, action_bound,
+    option = Option('agent0', sess, option_dim, state_dim, args.lro)
+    actor = Actor('agent0', sess, option_dim, action_dim, state_dim, action_bound,
                   option.s, option.s_, option.o,
                   option.o_, args.lra, REPLACEMENT)
-    critic = Critic(sess, option_dim, state_dim, action_dim, args.gamma,
+    critic = Critic('agent0', sess, option_dim, state_dim, action_dim, args.gamma,
                     actor.a, actor.a_, option.s, option.s_, option.o_v, option.o_v_,
                     args.lrc,
                     REPLACEMENT)

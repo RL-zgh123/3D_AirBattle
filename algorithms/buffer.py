@@ -2,6 +2,7 @@ import numpy as np
 from collections import deque
 import itertools
 import random
+import math
 
 class ReplayBuffer(object):
     def __init__(self, capacity, dims):

@@ -38,7 +38,7 @@ class entity(object):
         self.space_dim = 6 # [x, y, z, angle[0], angle[1], angle[2]]
         self.movable = movable
         self.is_friend = is_friend
-        self.radius = 1.5 if self.movable else 3
+        self.radius = 1.75 if self.movable else 3
         self.vel = np.zeros(self.action_dim, dtype=np.float32)
         self.acc = np.zeros(self.action_dim, dtype=np.float32)
 
