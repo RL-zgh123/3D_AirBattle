@@ -447,6 +447,22 @@ if __name__ == '__main__':
     option2.add_grad_to_graph(critic2.o_grads)
     sess.run(tf.global_variables_initializer())
 
+    # agent0 network for win rate test
+    option0 = Option('agent0', sess, option_dim, state_dim, args.lro)
+    actor0 = Actor('agent0', sess, option_dim, action_dim, state_dim, action_bound,
+                   option0.s, option0.s_, option0.o,
+                   option0.o_, args.lra, REPLACEMENT)
+    critic0 = Critic('agent0', sess, option_dim, state_dim, action_dim, args.gamma,
+                     actor0.a, actor0.a_, option0.s, option0.s_, option0.o_v,
+                     option0.o_v_,
+                     args.lrc,
+                     REPLACEMENT)
+    saved_file_path = '../results/option_{}.ckpt'.format(args.fig)
+    saver = tf.train.Saver()
+    saver.restore(sess, saved_file_path)
+    print('Sucessfully restore session data to agent0!')
+
+
     # replay buffer and reservior buffer
     Replay1 = ReplayBuffer(args.memory,
                            dims=2 * (
@@ -462,6 +478,7 @@ if __name__ == '__main__':
     mr_shaping = deque(maxlen=200)
     all_ep_r = []
     all_ep_r_shaping = []
+    win_rate_list = []
 
     for i in range(MAX_EPISODES):
         if i % 50 == 0:
@@ -566,12 +583,36 @@ if __name__ == '__main__':
 
         # test win rate
         if i % TEST_GAP == 0:
+            r = 0
+            wins = 0
+            alls = 0
+            test_num = 500
+            for _ in range(test_num): # test (test_num) times
+                s_1, info = env.reset()
+                s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
+                for _ in range(args.esteps):
+                    o1 = option1.get_option(s_1)
+                    o_v1 = option1.get_option_value(s_1)
+                    o0 = option0.get_option(s_0)
+                    o_v0 = option0.get_option_value(s_0)
 
+                    if random.random() > args.eta:
+                        p1_action = policy1.choose(s_1)
+                    else:
+                        p1_action = actor1.choose_action(s_1, o1[np.newaxis, :])
+                    p0_action = actor0.choose_action(s_0, o0[np.newaxis, :])
 
+                    s_1, r, done, info = env.step(p1_action, p0_action, o1, o_v1)
+                    s_0 = exchange_order(s_1_, friend_num, enemy_num, agent_features)
 
-
-
-
+                    if r != 0:
+                        break
+                alls += 1
+                if r > 0:
+                    wins += 1
+            win_rate = np.round(wins/alls, 2)
+            print('\n{} win rate: {}\n'.format(i//test_num, win_rate))
+            win_rate_list.append(win_rate)
 
         mr.append(ep_reward)
         mr_shaping.append(ep_reward_shaping)
@@ -597,7 +638,6 @@ if __name__ == '__main__':
     relative_path = '../results'
     file_name = args.fig
     file_path = '{}/nfsp_{}.ckpt'.format(relative_path, file_name)
-    saver = tf.train.Saver()
     saver.save(sess, file_path)
     print('Session has been saved sucessfully in {}'.format(file_path))
 
