@@ -4,6 +4,7 @@ import pickle
 import random
 import sys
 from collections import deque
+from tensorflow.python.tools import inspect_checkpoint as chkp
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -458,7 +459,12 @@ if __name__ == '__main__':
                      args.lrc,
                      REPLACEMENT)
     saved_file_path = '../results/option_{}.ckpt'.format(args.fig)
-    saver = tf.train.Saver()
+
+    chkp.print_tensors_in_checkpoint_file(saved_file_path, None, True, True)
+
+
+    restore_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent0')
+    saver = tf.train.Saver(restore_variables)
     saver.restore(sess, saved_file_path)
     print('Sucessfully restore session data to agent0!')
 
@@ -582,28 +588,29 @@ if __name__ == '__main__':
                           np.mean(list(mr_shaping)), 2))
 
         # test win rate
-        if i % TEST_GAP == 0:
+        if i % TEST_GAP == 0 and i > TEST_GAP:
+            print('\n Begin testing win rate!\n')
             r = 0
             wins = 0
             alls = 0
-            test_num = 500
-            for _ in range(test_num): # test (test_num) times
+            test_num = 100
+            for ii in range(test_num): # test (test_num) times
                 s_1, info = env.reset()
                 s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
-                for _ in range(args.esteps):
+                for jj in range(args.esteps):
                     o1 = option1.get_option(s_1)
                     o_v1 = option1.get_option_value(s_1)
                     o0 = option0.get_option(s_0)
                     o_v0 = option0.get_option_value(s_0)
 
                     if random.random() > args.eta:
-                        p1_action = policy1.choose(s_1)
+                        p1_action = policy1.choose_action(s_1)
                     else:
                         p1_action = actor1.choose_action(s_1, o1[np.newaxis, :])
                     p0_action = actor0.choose_action(s_0, o0[np.newaxis, :])
 
                     s_1, r, done, info = env.step(p1_action, p0_action, o1, o_v1)
-                    s_0 = exchange_order(s_1_, friend_num, enemy_num, agent_features)
+                    s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
 
                     if r != 0:
                         break

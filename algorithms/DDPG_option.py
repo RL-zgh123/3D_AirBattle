@@ -360,9 +360,11 @@ if __name__ == '__main__':
                     actor.a, actor.a_, option.s, option.s_, option.o_v, option.o_v_,
                     args.lrc,
                     REPLACEMENT)
-    actor.add_grad_to_graph(critic.a_grads)
-    option.add_grad_to_graph(critic.o_grads)
+    with tf.variable_scope('agent0'):
+        actor.add_grad_to_graph(critic.a_grads)
+        option.add_grad_to_graph(critic.o_grads)
     sess.run(tf.global_variables_initializer())
+    # print('sess', sess)
 
     M = Memory(args.memory,
                dims=2 * (state_dim + 1 + option_dim) + action_dim + 1)  # (s, o, o_v)
