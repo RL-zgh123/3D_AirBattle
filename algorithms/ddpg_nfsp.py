@@ -593,7 +593,7 @@ if __name__ == '__main__':
             r = 0
             wins = 0
             alls = 0
-            test_num = 200
+            test_num = 500
             for ii in range(test_num): # test (test_num) times
                 s_1, info = env.reset()
                 s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
@@ -627,7 +627,7 @@ if __name__ == '__main__':
         all_ep_r.append(np.round(np.mean(list(mr)), 2))
         all_ep_r_shaping.append(np.round(np.mean(list(mr_shaping)), 2))
 
-    # plot reward curve
+    # plot result curve
     plt.figure()
     plt.plot(np.arange(len(all_ep_r)), all_ep_r)
     plt.xlabel('Episode')
@@ -639,6 +639,12 @@ if __name__ == '__main__':
     plt.xlabel('Episode')
     plt.ylabel('Moving averaged episode shaping reward')
     plt.savefig('result_shaping_{}.jpg'.format(args.fig))
+
+    plt.figure()
+    plt.plot(np.arange(len(win_rate_list)), win_rate_list)
+    plt.xlabel('Times')
+    plt.ylabel('Win rate test')
+    plt.savefig('win_rate_{}.jpg'.format(args.fig))
 
     plt.show()
 

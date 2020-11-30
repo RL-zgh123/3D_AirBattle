@@ -15,11 +15,12 @@ from algorithms.Offense import Offense
 np.random.seed(1)
 tf.set_random_seed(1)
 
-FIG_NUM = 0
+FIG_NUM = 10
 EXPLORE = 10
+OPTION_RANDOM = 1
 RANDOM_DECAY = 0.9
 RANDOM_DECAY_GAP = 1000
-MAX_EPISODES = 4000
+MAX_EPISODES = 2500
 MAX_EP_STEPS = 200
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
@@ -86,11 +87,9 @@ class Option(object):
         # single structure
         with tf.variable_scope(self.name + '/option') as scope:
             self.o_v = self._build_net(self.s)
-            # self.o = tf.random.categorical(tf.math.log(self.o_v), 1)
             self.o = tf.random.categorical(self.o_v, 1)
             scope.reuse_variables()
             self.o_v_ = self._build_net(self.s_)
-            # self.o_ = tf.random.categorical(tf.math.log(self.o_v_), 1)
             self.o_ = tf.random.categorical(self.o_v_, 1)
         self.params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                         scope=self.name + '/option/net')
@@ -110,6 +109,9 @@ class Option(object):
                                      bias_initializer=init_b,
                                      name='value',
                                      trainable=trainable)
+            option_values = tf.clip_by_value(
+                tf.random_normal(tf.shape(values), mean=values,
+                                 stddev=OPTION_RANDOM), 0, 1)
         return values
 
     def learn(self, s):
@@ -134,7 +136,8 @@ class Option(object):
 
 
 class Actor(object):
-    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound, s, s_,
+    def __init__(self, name, sess, option_dim, action_dim, state_dim, action_bound,
+                 s, s_,
                  o,
                  o_, learning_rate=0.001, replacement=REPLACEMENT):
         self.name = name
@@ -232,7 +235,8 @@ class Actor(object):
 
 
 class Critic(object):
-    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_, s, s_,
+    def __init__(self, name, sess, option_dim, state_dim, action_dim, gamma, a, a_,
+                 s, s_,
                  o_v, o_v_, learning_rate,
                  replacement):
         self.name = name
@@ -388,6 +392,11 @@ if __name__ == '__main__':
         ep_reward_shaping = 0
 
         for j in range(args.esteps):
+            if M.pointer < args.memory:
+                OPTION_RANDOM = 1
+            else:
+                OPTION_RANDOM = 0
+
             o = option.get_option(s)
             o_v = option.get_option_value(s)
             a = actor.choose_action(s, o[np.newaxis, :])
