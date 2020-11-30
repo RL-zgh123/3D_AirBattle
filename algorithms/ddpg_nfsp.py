@@ -593,7 +593,7 @@ if __name__ == '__main__':
             r = 0
             wins = 0
             alls = 0
-            test_num = 100
+            test_num = 200
             for ii in range(test_num): # test (test_num) times
                 s_1, info = env.reset()
                 s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
@@ -613,12 +613,13 @@ if __name__ == '__main__':
                     s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
 
                     if r != 0:
+                        alls += 1
                         break
-                alls += 1
+
                 if r > 0:
                     wins += 1
             win_rate = np.round(wins/alls, 2)
-            print('\n{} win rate: {}\n'.format(i//test_num, win_rate))
+            print('\n{} games, win rate: {}\n'.format(alls, win_rate))
             win_rate_list.append(win_rate)
 
         mr.append(ep_reward)
