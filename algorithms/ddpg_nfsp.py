@@ -4,11 +4,11 @@ import pickle
 import random
 import sys
 from collections import deque
-from tensorflow.python.tools import inspect_checkpoint as chkp
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.tools import inspect_checkpoint as chkp
 
 sys.path.append('..')
 from envs.myEnv2 import AirBattle
@@ -25,7 +25,7 @@ RANDOM_DECAY_GAP = 1000
 MAX_EPISODES = 4000
 MAX_EP_STEPS = 200
 MULTI_STEPS = 1  # GAE steps
-TEST_GAP = 200 # win rate test interval
+TEST_GAP = 200  # win rate test interval
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 128
 LR_SL = 0.001  # learning rate for SL net
@@ -84,12 +84,12 @@ def multi_step_reward(rewards, gamma):
 def exchange_order(state, num_friend, num_enemy, agent_features):
     new_state = np.zeros(state.shape)
     new_state[:num_enemy * agent_features] = state[num_friend * agent_features:(
-                                                                                           num_friend + num_enemy) * agent_features]
+                                                                                       num_friend + num_enemy) * agent_features]
     new_state[
     num_enemy * agent_features:(num_enemy + num_friend) * agent_features] = state[
                                                                             :num_friend * agent_features]
     new_state[(num_friend + num_enemy) * agent_features:] = state[(
-                                                                              num_friend + num_enemy) * agent_features:]
+                                                                          num_friend + num_enemy) * agent_features:]
     return new_state
 
 
@@ -458,16 +458,15 @@ if __name__ == '__main__':
                      option0.o_v_,
                      args.lrc,
                      REPLACEMENT)
-    saved_file_path = '../results/option_{}.ckpt'.format(args.fig)
+    saved_file_path = '../results/option_{}.ckpt'.format(0)
 
     chkp.print_tensors_in_checkpoint_file(saved_file_path, None, True, True)
 
-
-    restore_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='agent0')
+    restore_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                          scope='agent0')
     saver = tf.train.Saver(restore_variables)
     saver.restore(sess, saved_file_path)
     print('Sucessfully restore session data to agent0!')
-
 
     # replay buffer and reservior buffer
     Replay1 = ReplayBuffer(args.memory,
@@ -594,7 +593,7 @@ if __name__ == '__main__':
             wins = 0
             alls = 0
             test_num = 500
-            for ii in range(test_num): # test (test_num) times
+            for ii in range(test_num):  # test (test_num) times
                 s_1, info = env.reset()
                 s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
                 for jj in range(args.esteps):
@@ -618,9 +617,39 @@ if __name__ == '__main__':
 
                 if r > 0:
                     wins += 1
-            win_rate = np.round(wins/alls, 2)
+            win_rate = np.round(wins / alls, 2)
             print('\n{} games, win rate: {}\n'.format(alls, win_rate))
             win_rate_list.append(win_rate)
+
+            # self test
+            print('\n Begin self testing!\n')
+            r = 0
+            wins = 0
+            alls = 0
+            test_num = 500
+            for ii in range(test_num):  # test (test_num) times
+                s_1, info = env.reset()
+                s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
+                for jj in range(args.esteps):
+                    o1 = option0.get_option(s_1)
+                    o_v1 = option0.get_option_value(s_1)
+                    o0 = option0.get_option(s_0)
+                    o_v0 = option0.get_option_value(s_0)
+
+                    p1_action = actor0.choose_action(s_1, o1[np.newaxis, :])
+                    p0_action = actor0.choose_action(s_0, o0[np.newaxis, :])
+
+                    s_1, r, done, info = env.step(p1_action, p0_action, o1, o_v1)
+                    s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
+
+                    if r != 0:
+                        alls += 1
+                        break
+
+                if r > 0:
+                    wins += 1
+            win_rate = np.round(wins / alls, 2)
+            print('\n{} games, self win rate: {}\n'.format(alls, win_rate))
 
         mr.append(ep_reward)
         mr_shaping.append(ep_reward_shaping)
