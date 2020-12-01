@@ -54,7 +54,20 @@ class Fig_Plotter(object):
                        condition=label[i])
         plt.show()
 
-    def plot_multi(self, relative_path, file_name, num_file, episodes):
+    def plot_multi(self, relative_path, file_name, num_file, episodes, ymin, ymax):
+        """
+        画路径下data文件包含的对应的单条图线的置信区间图
+        Args:
+            relative_path: 相对文件路径
+            file_name: 文件名
+            num_file: 一共读取文件数目
+            episodes: 需要读取的横轴长度（xmax）
+            ymin: y轴起始值
+            ymax: y轴最大值
+
+        Returns:
+
+        """
         all_data = {}
         for i in range(num_file):
             print(i)
@@ -83,7 +96,7 @@ class Fig_Plotter(object):
             ax.set_xlabel('Episodes')
             ax.set_ylabel('Reward')
 
-        plt.axis([0, episodes, -10, 35])
+        plt.axis([0, episodes, ymin, ymax])
         plt.show()
 
     def plot_compare(self, relative_path, file_name_list, key_word, num_file, episodes):
@@ -135,5 +148,5 @@ if __name__ == '__main__':
     plotter = Fig_Plotter()
     # plotter.plot_multi_demo()
     # plotter.plot_single('../results', 'option_data_0')
-    # plotter.plot_multi('../results/option', 'option_data', 4, 2000)
-    plotter.plot_compare('../results/option', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
+    plotter.plot_multi('../results/nfsp', 'nfsp_data', 4, 17, 0, 0.8)
+    # plotter.plot_compare('../results/option', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)

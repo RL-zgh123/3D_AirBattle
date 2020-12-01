@@ -686,7 +686,8 @@ if __name__ == '__main__':
 
     # save data as pkl
     d = {"mean episode reward": all_ep_r,
-         "mean episode shaping reward": all_ep_r_shaping}
+         "mean episode shaping reward": all_ep_r_shaping,
+         "win rate": win_rate_list}
     with open(os.path.join(relative_path, "nfsp_data_{}.pkl".format(file_name)),
               "wb") as f:
         pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
