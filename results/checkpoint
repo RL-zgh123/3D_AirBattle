@@ -1,2 +1,2 @@
-model_checkpoint_path: "nfsp_7.ckpt"
-all_model_checkpoint_paths: "nfsp_7.ckpt"
+model_checkpoint_path: "nfsp_0.ckpt"
+all_model_checkpoint_paths: "nfsp_0.ckpt"

@@ -622,34 +622,34 @@ if __name__ == '__main__':
             win_rate_list.append(win_rate)
 
             # self test
-            print('\n Begin self testing!\n')
-            r = 0
-            wins = 0
-            alls = 0
-            test_num = 500
-            for ii in range(test_num):  # test (test_num) times
-                s_1, info = env.reset()
-                s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
-                for jj in range(args.esteps):
-                    o1 = option0.get_option(s_1)
-                    o_v1 = option0.get_option_value(s_1)
-                    o0 = option0.get_option(s_0)
-                    o_v0 = option0.get_option_value(s_0)
-
-                    p1_action = actor0.choose_action(s_1, o1[np.newaxis, :])
-                    p0_action = actor0.choose_action(s_0, o0[np.newaxis, :])
-
-                    s_1, r, done, info = env.step(p1_action, p0_action, o1, o_v1)
-                    s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
-
-                    if r != 0:
-                        alls += 1
-                        break
-
-                if r > 0:
-                    wins += 1
-            win_rate = np.round(wins / alls, 2)
-            print('\n{} games, self win rate: {}\n'.format(alls, win_rate))
+            # print('\n Begin self testing!\n')
+            # r = 0
+            # wins = 0
+            # alls = 0
+            # test_num = 500
+            # for ii in range(test_num):  # test (test_num) times
+            #     s_1, info = env.reset()
+            #     s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
+            #     for jj in range(args.esteps):
+            #         o1 = option0.get_option(s_1)
+            #         o_v1 = option0.get_option_value(s_1)
+            #         o0 = option0.get_option(s_0)
+            #         o_v0 = option0.get_option_value(s_0)
+            #
+            #         p1_action = actor0.choose_action(s_1, o1[np.newaxis, :])
+            #         p0_action = actor0.choose_action(s_0, o0[np.newaxis, :])
+            #
+            #         s_1, r, done, info = env.step(p1_action, p0_action, o1, o_v1)
+            #         s_0 = exchange_order(s_1, friend_num, enemy_num, agent_features)
+            #
+            #         if r != 0:
+            #             alls += 1
+            #             break
+            #
+            #     if r > 0:
+            #         wins += 1
+            # win_rate = np.round(wins / alls, 2)
+            # print('\n{} games, self win rate: {}\n'.format(alls, win_rate))
 
         mr.append(ep_reward)
         mr_shaping.append(ep_reward_shaping)

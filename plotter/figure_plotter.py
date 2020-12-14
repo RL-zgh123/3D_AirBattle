@@ -6,19 +6,41 @@ import numpy as np
 
 
 class Fig_Plotter(object):
-    def plot_single(self, relative_path, file_name):
+    def plot_single(self, relative_path, file_name, ymin, ymax, key_word=None):
+        """
+
+        Args:
+            relative_path:
+            file_name:
+            ymin:
+            ymax:
+            key_word:
+
+        Returns:
+
+        """
         file = file_name + '.pkl'
         with open(os.path.join(relative_path, file), "rb") as f:
             data = pickle.load(f)
 
-        for k in data.keys():
+        if key_word is None:
+            for k in data.keys():
+                fig = plt.figure()
+                x = data[k]
+                # x = self.smooth(x, sm=2)
+                print(np.array(x).shape)
+                length = np.array(x).shape[0]
+                sns.set(style="darkgrid", font_scale=1.5)
+                sns.tsplot(time=range(length), data=x, color="r", condition=k)
+        else:
             fig = plt.figure()
-            x = data[k]
-            # x = self.smooth(x, sm=2)
+            x = data[key_word]
             print(np.array(x).shape)
             length = np.array(x).shape[0]
             sns.set(style="darkgrid", font_scale=1.5)
             sns.tsplot(time=range(length), data=x, color="r", condition=k)
+
+        plt.ylim(ymin, ymax)
         plt.show()
 
     def plot_multi_demo(self):
@@ -54,9 +76,10 @@ class Fig_Plotter(object):
                        condition=label[i])
         plt.show()
 
-    def plot_multi(self, relative_path, file_name, num_file, episodes, ymin, ymax):
+    def plot_multi(self, relative_path, file_name, num_file, episodes, ymin, ymax, key_word=None):
         """
-        画路径下data文件包含的对应的单条图线的置信区间图
+        画路径下data文件包含的对应的多条置信区间图的对比图(key_word = None)
+        画单条置信区间图传入对应的键key_word
         Args:
             relative_path: 相对文件路径
             file_name: 文件名
@@ -75,26 +98,43 @@ class Fig_Plotter(object):
             with open(os.path.join(relative_path, file), "rb") as f:
                 data = pickle.load(f)
 
-            for key in data.keys():
+            if key_word is None:
+                for key in data.keys():
+                    if key not in all_data.keys():
+                        all_data[key] = np.array(data[key])[np.newaxis, :episodes]
+                    else:
+                        all_data[key] = np.concatenate([all_data[key], np.array(data[key])[np.newaxis, :episodes]], axis=0)
+                print(i)
+            else:
+                key = key_word
                 if key not in all_data.keys():
+                    print(data.keys())
                     all_data[key] = np.array(data[key])[np.newaxis, :episodes]
                 else:
-                    all_data[key] = np.concatenate([all_data[key], np.array(data[key])[np.newaxis, :episodes]], axis=0)
-            print(i)
+                    all_data[key] = np.concatenate(
+                        [all_data[key], np.array(data[key])[np.newaxis, :episodes]],
+                        axis=0)
 
         fig = plt.figure()
         xdata = np.array(range(episodes))
-        linestyle = ['-', ':']
+        # 每次linestyle, color, label要根据具体出图内容手动调整修改
+        # for win rate
+        # linestyle = ['-']
+        # color = ['r']
+        # label = ['win rate']
+
+        # for reward comparison
+        linestyle = ['-', '--']
         color = ['r', 'g']
-        label = ['mean reward', 'mean shaping reward']
+        label = ['DDPG_Option (k=10)', 'Origin DDPG']
 
         for i, key in enumerate(all_data.keys()):
             ax = sns.tsplot(time=xdata, data=all_data[key], color=color[i],
                        linestyle=linestyle[i],
                        condition=label[i])
             ax.legend(fontsize=15)
-            ax.set_xlabel('Episodes')
-            ax.set_ylabel('Reward')
+            ax.set_xlabel('Times')
+            ax.set_ylabel('Rate')
 
         plt.axis([0, episodes, ymin, ymax])
         plt.show()
@@ -148,5 +188,6 @@ if __name__ == '__main__':
     plotter = Fig_Plotter()
     # plotter.plot_multi_demo()
     # plotter.plot_single('../results', 'option_data_0')
-    plotter.plot_multi('../results/nfsp', 'nfsp_data', 4, 17, 0, 0.8)
-    # plotter.plot_compare('../results/option', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
+    # plotter.plot_multi('../results/option/option_old', 'option_data', 4, 2000, -10, 35)
+    # plotter.plot_multi('../results/nfsp', 'nfsp_data', 4, 17, 0, 0.8, 'win rate')
+    plotter.plot_compare('../results/option/option_old', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
