@@ -1,6 +1,7 @@
 import sys
-
+import pickle
 import numpy as np
+import os
 import tensorflow as tf
 
 sys.path.append('..')
@@ -52,7 +53,11 @@ class Model(object):
         option_old = 0
         option_count = 0
         option_list = []
+        friend_pos = []
+        enemy_pos = []
         while True:
+            friend_pos.append(o_n[:6].tolist())
+            enemy_pos.append(o_n[13:19].tolist())
             self.step_count += 1
             steps += 1
             act0, act1, option, option_value = self._get_action(o_n, info)
@@ -65,7 +70,12 @@ class Model(object):
             o_n = o_n_next
             if steps == self.max_steps or d_n:
                 break
-        return steps, r_all, option_count, option_list
+        return steps, r_all, option_count, option_list, friend_pos, enemy_pos
+
+def save_data(data, relative_path, file_name):
+    with open(os.path.join(relative_path, "{}.pkl".format(file_name)),
+              "wb") as f:
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
@@ -76,18 +86,24 @@ if __name__ == '__main__':
     model = Model(file_path)
     dic = {'win': 0, 'equal': 0, 'lose': 0}
     option_total = []
+    win_count = 0
 
     for i in range(iterations):
-        steps, r_all, option_count, option_list = model.rollout()
+        steps, r_all, option_count, option_list, friend_pos, enemy_pos = model.rollout()
         print('Iteration {}, steps: {}, r_all: {}'.format(i, steps, r_all))
+
         if option_count > 3:
-            print('steps:', steps)
-            print('option_list:', option_list)
+            # print('steps:', steps)
+            # print('option_list:', option_list)
             if steps != model.max_steps:
                 option_total.append(option_list)
+
         if r_all > 0:
             # model.env.render(steps)
+            win_count += 1
             dic['win'] += 1
+            save_data(friend_pos, relative_path, 'friend_pos_{}'.format(win_count))
+            save_data(enemy_pos, relative_path, 'enemy_pos_{}'.format(win_count))
         elif r_all == 0:
             dic['equal'] += 1
         else:

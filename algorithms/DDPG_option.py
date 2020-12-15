@@ -326,6 +326,11 @@ class Critic(object):
             if self.t_replace_counter % self.replacement['rep_iter_c'] == 0:
                 self.sess.run(self.hard_replacement)
             self.t_replace_counter += 1
+        return self.sess.run(self.loss, feed_dict={self.s: s, self.a: a, self.r: r, self.s_: s_,
+                                 self.o_v: o_v, self.o_v_: o_v_})
+
+    def get_q_value(self, s, a, o_v):
+        return self.sess.run(self.q, {self.s:s, self.a: a, self.o_v: o_v})
 
 
 class Memory(object):
@@ -376,6 +381,8 @@ if __name__ == '__main__':
     mr_shaping = deque(maxlen=200)
     all_ep_r = []
     all_ep_r_shaping = []
+    critic_loss = []
+    critic_q = []
 
     if OUTPUT_GRAPH:
         tf.summary.FileWriter("../logs/", sess.graph)
@@ -438,8 +445,12 @@ if __name__ == '__main__':
                 b_ov_ = b_M[:, -option_dim:]
 
                 option.learn(b_s)
-                critic.learn(b_s, b_ov, b_a, b_r, b_s_, b_ov_)
                 actor.learn(b_s, b_o)
+                loss = critic.learn(b_s, b_ov, b_a, b_r, b_s_, b_ov_)
+                q_value = critic.get_q_value(s[np.newaxis, :], a[np.newaxis, :], o_v[np.newaxis, :])[0][0]
+                print('loss: {}, q: {}'.format(loss, q_value))
+                critic_loss.append(loss)
+                critic_q.append(q_value)
 
             s = s_
             ep_reward += r
@@ -480,7 +491,24 @@ if __name__ == '__main__':
 
     # save data as pkl
     d = {"mean episode reward": all_ep_r,
-         "mean episode shaping reward": all_ep_r_shaping}
-    with open(os.path.join(relative_path, "option_data_{}.pkl".format(file_name)),
+         "mean episode shaping reward": all_ep_r_shaping,
+         "critic loss": critic_loss,
+         "critic q": critic_q}
+    with open(os.path.join(relative_path, "option_data_new_{}.pkl".format(file_name)),
               "wb") as f:
         pickle.dump(d, f, pickle.HIGHEST_PROTOCOL)
+
+    # plot critic loss and q value(option & actor loss)
+    # x = np.arange(args.memory, MAX_EPISODES)
+    # y1 = np.array(critic_loss)
+    # y2 = np.array(critic_q)
+    #
+    # fig = plt.figure()
+    # ax1 = fig.add_subplot(111)
+    # # ax1.set_title('Option Switch')
+    # plt.plot(x, y)
+    # plt.xlabel('Steps')
+    # plt.ylabel('Critic Loss')
+    # plt.yticks([0, 1])
+    # # plt.legend('Option')
+    # plt.show()

@@ -188,6 +188,6 @@ if __name__ == '__main__':
     plotter = Fig_Plotter()
     # plotter.plot_multi_demo()
     # plotter.plot_single('../results', 'option_data_0')
-    # plotter.plot_multi('../results/option/option_old', 'option_data', 4, 2000, -10, 35)
+    plotter.plot_multi('../results/option/option_old', 'option_data', 4, 2000, -10, 35)
     # plotter.plot_multi('../results/nfsp', 'nfsp_data', 4, 17, 0, 0.8, 'win rate')
-    plotter.plot_compare('../results/option/option_old', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
+    # plotter.plot_compare('../results/option/option_old', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)
