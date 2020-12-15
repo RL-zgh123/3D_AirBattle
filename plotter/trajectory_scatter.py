@@ -45,7 +45,7 @@ def get_data(relative_path, file_name):
     z = data[:, 2]
     return x, y, z
 
-
+# 主函数
 relative_path = '../results'
 for i in range(1, 3):
     fig = plt.figure()
