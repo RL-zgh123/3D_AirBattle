@@ -119,14 +119,10 @@ class Fig_Plotter(object):
         xdata = np.array(range(episodes))
         # 每次linestyle, color, label要根据具体出图内容手动调整修改
         # for win rate
-        # linestyle = ['-']
-        # color = ['r']
-        # label = ['win rate']
+        linestyle = ['-']
+        color = ['r']
+        label = ['win rate']
 
-        # for reward comparison
-        linestyle = ['-', '--']
-        color = ['r', 'g']
-        label = ['DDPG_Option (k=10)', 'Origin DDPG']
 
         for i, key in enumerate(all_data.keys()):
             ax = sns.tsplot(time=xdata, data=all_data[key], color=color[i],
@@ -188,6 +184,6 @@ if __name__ == '__main__':
     plotter = Fig_Plotter()
     # plotter.plot_multi_demo()
     # plotter.plot_single('../results', 'option_data_0')
-    plotter.plot_multi('../results/option/option_old', 'option_data', 4, 2000, -10, 35)
-    # plotter.plot_multi('../results/nfsp', 'nfsp_data', 4, 17, 0, 0.8, 'win rate')
+    # plotter.plot_multi('../results/option/option_old', 'option_data', 4, 2000, -10, 35)
+    plotter.plot_multi('../results/nfsp', 'nfsp_data', 3, 17, 0, 0.8, 'win rate')
     # plotter.plot_compare('../results/option/option_old', ['option_data', 'option_origin'], 'mean episode reward', 4, 3500)

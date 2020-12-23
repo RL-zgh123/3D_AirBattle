@@ -47,26 +47,33 @@ def get_data(relative_path, file_name):
 
 # 主函数
 relative_path = '../results'
-for i in range(1, 3):
+for i in range(1, 18):
     fig = plt.figure()
     # ax = Axes3D(fig)
     ax = fig.add_subplot(111, projection='3d')
 
     # friend trajectory
     x, y, z = get_data(relative_path, 'friend_pos_{}.pkl'.format(i))
-    ax.scatter(x, y, z, color='g', marker='*')
-    ax.plot(x, y, z, color='g')
+    for i in range(1, int(len(x)/10)):
+        direct = np.array([x[10*i]-x[10*i-1], y[10*i]-y[10*i-1], z[10*i]-z[10*i-1]])
+        direct_norm = direct / np.linalg.norm(direct)
+        # print(direct)
+        # ax.scatter(x[10*i], y[10*i], z[10*i], color='r', marker=(direct, 0))
+        ax.quiver(x[10*i], y[10*i], z[10*i], direct[0], direct[1], direct[2], color='g', length=1, arrow_length_ratio=3)
+
+    l1, = ax.plot(x, y, z, color='r')
     # for ii in range(1, x.shape[0]):
     #     ax.arrow3D(x[ii - 1], y[ii - 1], z[ii - 1], (x[ii] - x[ii - 1]) / 2,
     #                (y[ii] - y[ii - 1]) / 2, (z[ii] - z[ii - 1]) / 2)
 
     # enemy trajectory
     x, y, z = get_data(relative_path, 'enemy_pos_{}.pkl'.format(i))
-    ax.scatter(x, y, z, color='r', marker='o')
-    ax.plot(x, y, z, color='r')
+    # ax.scatter(x, y, z, color='g', marker='o')
+    l2, = ax.plot(x, y, z, color='g')
 
     # 添加坐标轴(顺序是Z, Y, X)
     ax.set_zlabel('Z', fontdict={'size': 15, 'color': 'red'})
     ax.set_ylabel('Y', fontdict={'size': 15, 'color': 'red'})
     ax.set_xlabel('X', fontdict={'size': 15, 'color': 'red'})
+    plt.legend(handles=[l1, l2, ], labels=['Friend', 'Enemy'], loc='best')
     plt.show()
